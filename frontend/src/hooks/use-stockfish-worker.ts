@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { StockfishBridge } from "@/workers/stockfish-bridge";
 import type { EngineLevel, EvalScore, EngineStatus } from "@/types/engine";
 
+export interface PositionAnalysis {
+  readonly evaluation: EvalScore;
+  readonly bestMove: string;
+}
+
 export interface UseStockfishWorkerReturn {
   readonly engineStatus: EngineStatus;
   readonly isThinking: boolean;
@@ -10,6 +15,7 @@ export interface UseStockfishWorkerReturn {
   readonly findBestMove: (fen: string, level: EngineLevel) => void;
   readonly startAnalysis: (fen: string) => void;
   readonly stopThinking: () => void;
+  readonly analyzePosition: (fen: string, depth: number) => Promise<PositionAnalysis>;
 }
 
 function detectHashSize(): number {
@@ -138,6 +144,39 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     setEngineStatus("ready");
   }, []);
 
+  const analyzePosition = useCallback(
+    (fen: string, depth: number): Promise<PositionAnalysis> => {
+      return new Promise((resolve) => {
+        const bridge = bridgeRef.current;
+        if (!bridge?.ready) {
+          resolve({
+            evaluation: { type: "cp", value: 0, depth: 0 },
+            bestMove: "",
+          });
+          return;
+        }
+
+        bridge.send("setoption name Skill Level value 20");
+        bridge.send("setoption name UCI_LimitStrength value false");
+        bridge.send(`position fen ${fen}`);
+        bridge.send(`go depth ${depth}`);
+
+        let lastEval: EvalScore = { type: "cp", value: 0, depth: 0 };
+
+        const unsubscribe = bridge.onMessage((msg) => {
+          if (msg.evaluation) {
+            lastEval = msg.evaluation;
+          }
+          if (msg.bestMove) {
+            unsubscribe();
+            resolve({ evaluation: lastEval, bestMove: msg.bestMove });
+          }
+        });
+      });
+    },
+    [],
+  );
+
   return {
     engineStatus,
     isThinking: engineStatus === "thinking",
@@ -146,5 +185,6 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     findBestMove,
     startAnalysis,
     stopThinking,
+    analyzePosition,
   };
 }

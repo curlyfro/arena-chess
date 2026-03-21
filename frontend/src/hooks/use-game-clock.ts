@@ -5,10 +5,10 @@ import type { TimeControlPreset } from "@/types/clock";
 export interface UseGameClockReturn {
   readonly whiteMs: number;
   readonly blackMs: number;
+  readonly whiteMsRef: React.RefObject<number>;
+  readonly blackMsRef: React.RefObject<number>;
   readonly activeColor: PieceColor | null;
   readonly flaggedColor: PieceColor | null;
-  readonly isLowTime: (color: PieceColor) => boolean;
-  readonly isCriticalTime: (color: PieceColor) => boolean;
   readonly start: (color: PieceColor) => void;
   readonly switchClock: (addIncrementTo?: PieceColor) => void;
   readonly pause: () => void;
@@ -32,7 +32,6 @@ export function useGameClock(
   const rafIdRef = useRef<number>(0);
   const runningRef = useRef(false);
   const incrementMsRef = useRef(timeControl.incrementMs);
-  const syncCounterRef = useRef(0);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -62,13 +61,6 @@ export function useGameClock(
         runningRef.current = false;
         return;
       }
-    }
-
-    // Sync React state every ~100ms (every 6 frames at 60fps)
-    syncCounterRef.current++;
-    if (syncCounterRef.current % 6 === 0) {
-      setWhiteMs(Math.round(whiteMsRef.current));
-      setBlackMs(Math.round(blackMsRef.current));
     }
 
     rafIdRef.current = requestAnimationFrame(tick);
@@ -156,22 +148,6 @@ export function useGameClock(
     [stopLoop],
   );
 
-  const isLowTime = useCallback(
-    (color: PieceColor) => {
-      const ms = color === "w" ? whiteMs : blackMs;
-      return ms > 0 && ms < 10_000;
-    },
-    [whiteMs, blackMs],
-  );
-
-  const isCriticalTime = useCallback(
-    (color: PieceColor) => {
-      const ms = color === "w" ? whiteMs : blackMs;
-      return ms > 0 && ms < 5_000;
-    },
-    [whiteMs, blackMs],
-  );
-
   const restore = useCallback(
     (white: number, black: number, active: PieceColor | null) => {
       stopLoop();
@@ -192,10 +168,10 @@ export function useGameClock(
   return {
     whiteMs,
     blackMs,
+    whiteMsRef,
+    blackMsRef,
     activeColor,
     flaggedColor,
-    isLowTime,
-    isCriticalTime,
     start,
     switchClock,
     pause,

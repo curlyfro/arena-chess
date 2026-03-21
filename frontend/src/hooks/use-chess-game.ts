@@ -57,6 +57,7 @@ export interface UseChessGameReturn {
   readonly legalMoves: readonly ChessMove[];
   readonly getLegalMovesForSquare: (square: Square) => readonly ChessMove[];
   readonly makeMove: (move: ChessMove) => AnnotatedMove | null;
+  readonly undo: (count?: number) => void;
   readonly resign: (playerColor: PieceColor) => void;
   readonly agreeDraw: () => void;
   readonly setFlagged: (flaggedColor: PieceColor) => void;
@@ -140,6 +141,25 @@ export function useChessGame(
     [bump],
   );
 
+  const undo = useCallback(
+    (count = 1) => {
+      const c = chessRef.current;
+      let undone = 0;
+      for (let i = 0; i < count; i++) {
+        const result = c.undo();
+        if (!result) break;
+        undone++;
+      }
+      if (undone > 0) {
+        setAnnotatedHistory((prev) => prev.slice(0, -undone));
+        setExtraStatus(undefined);
+        setTerminatingColor(undefined);
+        bump();
+      }
+    },
+    [bump],
+  );
+
   const resign = useCallback(
     (playerColor: PieceColor) => {
       setTerminatingColor(playerColor);
@@ -201,6 +221,7 @@ export function useChessGame(
     legalMoves,
     getLegalMovesForSquare,
     makeMove,
+    undo,
     resign,
     agreeDraw,
     setFlagged,

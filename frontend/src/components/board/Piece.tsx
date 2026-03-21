@@ -11,18 +11,6 @@ interface PieceProps {
   readonly isDragging?: boolean;
 }
 
-const STYLE_NORMAL: React.CSSProperties = {
-  opacity: 1,
-  transition: "transform 120ms ease-out",
-  pointerEvents: "none",
-};
-
-const STYLE_DRAGGING: React.CSSProperties = {
-  opacity: 0.3,
-  transition: "transform 120ms ease-out",
-  pointerEvents: "none",
-};
-
 export const Piece = memo(function Piece({
   piece,
   x,
@@ -38,11 +26,13 @@ export const Piece = memo(function Piece({
   return (
     <image
       href={href}
-      x={x}
-      y={y}
       width={SQUARE_SIZE}
       height={SQUARE_SIZE}
-      style={isDragging ? STYLE_DRAGGING : STYLE_NORMAL}
+      style={{
+        transform: `translate(${x}px, ${y}px)`,
+        opacity: isDragging ? 0.3 : 1,
+        pointerEvents: "none",
+      }}
     />
   );
 });

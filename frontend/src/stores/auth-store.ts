@@ -88,7 +88,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     try {
       await hydrateSession(token, set);
-    } catch {
+    } catch (err) {
+      console.warn("Session hydration failed, clearing token:", err);
       localStorage.removeItem(AUTH_TOKEN_KEY);
       set({ user: null, playerProfile: null, token: null });
     }
@@ -100,8 +101,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { data: profile } = await playerApi.getProfile(user.playerId);
       set({ playerProfile: profile });
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("Profile refresh failed:", err);
     }
   },
 }));

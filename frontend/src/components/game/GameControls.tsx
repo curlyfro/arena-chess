@@ -4,16 +4,20 @@ interface GameControlsProps {
   readonly isGameOver: boolean;
   readonly onResign: () => void;
   readonly onOfferDraw: () => void;
+  readonly onTakeback: () => void;
   readonly onFlipBoard: () => void;
   readonly onToggleHint: () => void;
+  readonly canTakeback: boolean;
 }
 
 export const GameControls = memo(function GameControls({
   isGameOver,
   onResign,
   onOfferDraw,
+  onTakeback,
   onFlipBoard,
   onToggleHint,
+  canTakeback,
 }: GameControlsProps) {
   const [confirmResign, setConfirmResign] = useState(false);
 
@@ -29,11 +33,12 @@ export const GameControls = memo(function GameControls({
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" role="toolbar" aria-label="Game controls">
       {!isGameOver && (
         <>
           <button
             onClick={handleResign}
+            aria-label={confirmResign ? "Confirm resignation" : "Resign game"}
             className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
               confirmResign
                 ? "bg-red-600 text-white"
@@ -44,24 +49,33 @@ export const GameControls = memo(function GameControls({
           </button>
           <button
             onClick={onOfferDraw}
+            aria-label="Offer draw"
             className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/80"
           >
             Draw
+          </button>
+          <button
+            onClick={onTakeback}
+            disabled={!canTakeback}
+            aria-label="Take back last move"
+            className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Undo
           </button>
         </>
       )}
       <button
         onClick={onFlipBoard}
+        aria-label="Flip board (F)"
         className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/80"
-        title="Flip board"
       >
         ⇅
       </button>
       {!isGameOver && (
         <button
           onClick={onToggleHint}
+          aria-label="Show best move hint"
           className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/80"
-          title="Show best move"
         >
           Hint
         </button>

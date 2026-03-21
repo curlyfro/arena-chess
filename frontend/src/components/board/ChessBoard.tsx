@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   Square as SquareType,
   PieceColor,
@@ -8,14 +8,74 @@ import type {
   PieceSet,
 } from "@/types/chess";
 import { FILES, RANKS } from "@/types/chess";
+import { squareToSvg, SQUARE_SIZE } from "@/lib/board-coordinates";
+import { getPieceUrl } from "@/lib/piece-url";
 import { Square } from "./Square";
 import { Piece } from "./Piece";
 import { HighlightLayer } from "./HighlightLayer";
 import { DragLayer } from "./DragLayer";
 import { CoordinateLabels } from "./CoordinateLabels";
 import { BestMoveArrow } from "./BestMoveArrow";
+import { UserAnnotationLayer, type UserArrow } from "./UserAnnotationLayer";
 import { PromotionDialog } from "./PromotionDialog";
 import { useBoardInteraction } from "@/hooks/use-board-interaction";
+
+const MOVE_ANIMATION_MS = 150;
+
+interface MoveAnimationState {
+  readonly piece: BoardPiece;
+  readonly fromX: number;
+  readonly fromY: number;
+  readonly toX: number;
+  readonly toY: number;
+  readonly toSquare: SquareType;
+}
+
+function MoveAnimationLayer({
+  anim,
+  pieceSet,
+  onComplete,
+}: {
+  readonly anim: MoveAnimationState;
+  readonly pieceSet: PieceSet;
+  readonly onComplete: () => void;
+}) {
+  const ref = useRef<SVGImageElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      onComplete();
+      return;
+    }
+
+    const animation = el.animate(
+      [
+        { transform: `translate(${anim.fromX}px, ${anim.fromY}px)` },
+        { transform: `translate(${anim.toX}px, ${anim.toY}px)` },
+      ],
+      { duration: MOVE_ANIMATION_MS, easing: "ease-out", fill: "forwards" },
+    );
+
+    animation.onfinish = onComplete;
+    return () => animation.cancel();
+    // Run only on mount — animation params are fixed for this instance
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <image
+      ref={ref}
+      href={getPieceUrl(anim.piece.color, anim.piece.type, pieceSet)}
+      width={SQUARE_SIZE}
+      height={SQUARE_SIZE}
+      style={{
+        transform: `translate(${anim.fromX}px, ${anim.fromY}px)`,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
 
 interface ChessBoardProps {
   readonly board: readonly (BoardPiece | null)[][];
@@ -94,6 +154,17 @@ export function ChessBoard({
   const boardRef = useRef(board);
   boardRef.current = board;
 
+  // ── Move animation ──
+  const [animating, setAnimating] = useState<MoveAnimationState | null>(null);
+  const lastMoveWasDragRef = useRef(false);
+  const prevLastMoveRef = useRef(lastMove);
+
+  // ── User annotations (right-click arrows & highlights) ──
+  const [userArrows, setUserArrows] = useState<UserArrow[]>([]);
+  const [userHighlights, setUserHighlights] = useState<SquareType[]>([]);
+  const rightClickSourceRef = useRef<SquareType | null>(null);
+  const rightClickDraggedRef = useRef(false);
+
   const toSvgCoords = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } => {
       const svg = svgRef.current;
@@ -143,22 +214,120 @@ export function ChessBoard({
     const onPointerUp = (e: PointerEvent) => {
       const svg = toSvgCoords(e.clientX, e.clientY);
       const square = squareFromSvg(svg.x, svg.y);
+      // Track if this move originated from a drag (skip animation for drags)
+      lastMoveWasDragRef.current = !!interactionRef.current.dragSquare;
       interactionRef.current.handlePointerUp(square);
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      const svg = svgRef.current;
+      if (svg && svg.contains(e.target as Node)) {
+        e.preventDefault();
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return; // Right-click only
+      const svg = svgRef.current;
+      if (!svg || !svg.contains(e.target as Node)) return;
+      const coords = toSvgCoords(e.clientX, e.clientY);
+      const square = squareFromSvg(coords.x, coords.y);
+      if (square) {
+        rightClickSourceRef.current = square;
+        rightClickDraggedRef.current = false;
+      }
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (e.buttons !== 2 || !rightClickSourceRef.current) return;
+      rightClickDraggedRef.current = true;
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button !== 2 || !rightClickSourceRef.current) return;
+      const source = rightClickSourceRef.current;
+      rightClickSourceRef.current = null;
+
+      const coords = toSvgCoords(e.clientX, e.clientY);
+      const target = squareFromSvg(coords.x, coords.y);
+
+      if (!rightClickDraggedRef.current || !target || target === source) {
+        // Right-click without drag — toggle square highlight
+        setUserHighlights((prev) =>
+          prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source],
+        );
+      } else if (target) {
+        // Right-click drag — toggle arrow
+        setUserArrows((prev) => {
+          const exists = prev.some((a) => a.from === source && a.to === target);
+          return exists
+            ? prev.filter((a) => !(a.from === source && a.to === target))
+            : [...prev, { from: source, to: target }];
+        });
+      }
     };
 
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
 
     return () => {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
     };
   }, [toSvgCoords, squareFromSvg]);
+
+  // Trigger move animation when lastMove changes
+  useEffect(() => {
+    const prev = prevLastMoveRef.current;
+    prevLastMoveRef.current = lastMove;
+
+    if (!lastMove) return;
+    if (prev && lastMove.from === prev.from && lastMove.to === prev.to) return;
+
+    // Clear user annotations on new move
+    setUserArrows([]);
+    setUserHighlights([]);
+
+    // Skip animation for drag-to-move (user already saw the piece travel)
+    if (lastMoveWasDragRef.current) {
+      lastMoveWasDragRef.current = false;
+      return;
+    }
+
+    const piece = getPieceAt(lastMove.to);
+    if (!piece) return;
+
+    const from = squareToSvg(lastMove.from, flipped);
+    const to = squareToSvg(lastMove.to, flipped);
+
+    setAnimating({
+      piece,
+      fromX: from.x,
+      fromY: from.y,
+      toX: to.x,
+      toY: to.y,
+      toSquare: lastMove.to,
+    });
+  }, [lastMove, flipped, getPieceAt]);
+
+  const handleAnimationComplete = useCallback(() => {
+    setAnimating(null);
+  }, []);
 
   // Only pointerdown stays as a React event (on the SVG itself)
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       e.preventDefault();
+      setUserArrows((prev) => prev.length > 0 ? [] : prev);
+      setUserHighlights((prev) => prev.length > 0 ? [] : prev);
       const svg = toSvgCoords(e.clientX, e.clientY);
       const square = squareFromSvg(svg.x, svg.y);
       if (!square) return;
@@ -196,16 +365,19 @@ export function ChessBoard({
       const piece = board[7 - displayRank]?.[displayFile];
       if (piece) {
         const isDragging = interaction.dragSquare === square;
-        pieces.push(
-          <Piece
-            key={`pc-${square}`}
-            piece={piece}
-            x={x}
-            y={y}
-            pieceSet={pieceSet}
-            isDragging={isDragging}
-          />,
-        );
+        const isAnimatingTo = animating?.toSquare === square;
+        if (!isAnimatingTo) {
+          pieces.push(
+            <Piece
+              key={`pc-${square}`}
+              piece={piece}
+              x={x}
+              y={y}
+              pieceSet={pieceSet}
+              isDragging={isDragging}
+            />,
+          );
+        }
       }
     }
   }
@@ -260,6 +432,20 @@ export function ChessBoard({
       )}
 
       {pieces}
+
+      {animating && (
+        <MoveAnimationLayer
+          anim={animating}
+          pieceSet={pieceSet}
+          onComplete={handleAnimationComplete}
+        />
+      )}
+
+      <UserAnnotationLayer
+        arrows={userArrows}
+        highlights={userHighlights}
+        flipped={flipped}
+      />
 
       {bestMoveArrow && (
         <BestMoveArrow

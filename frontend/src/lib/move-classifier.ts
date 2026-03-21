@@ -2,15 +2,6 @@ import type { MoveClassification } from "@/types/chess";
 import type { EvalScore } from "@/types/engine";
 import type { PostGameStats } from "@/types/game";
 
-/**
- * Classify a move by centipawn loss relative to engine's best evaluation.
- * Thresholds per spec section 4.5:
- * - Blunder: >200cp loss
- * - Mistake: >100cp loss
- * - Inaccuracy: >50cp loss
- * - Good: within 50cp
- * - Best: within 20cp
- */
 export function classifyMove(cpLoss: number): MoveClassification {
   if (cpLoss >= 200) return "blunder";
   if (cpLoss >= 100) return "mistake";
@@ -20,9 +11,28 @@ export function classifyMove(cpLoss: number): MoveClassification {
 }
 
 /**
- * Compute post-game statistics from the evaluation history.
- * Evaluations alternate: position after white's move, after black's move, etc.
+ * Classify each move given the full eval history.
+ * evalHistory[0] = starting position, evalHistory[i+1] = position after move i.
  */
+export function classifyMoves(
+  evalHistory: readonly EvalScore[],
+): ReadonlyMap<number, MoveClassification> {
+  const result = new Map<number, MoveClassification>();
+  for (let i = 1; i < evalHistory.length; i++) {
+    const prev = evalHistory[i - 1];
+    const curr = evalHistory[i];
+    if (prev.type === "mate" || curr.type === "mate") continue;
+
+    const isWhiteMove = i % 2 === 1;
+    const cpLoss = isWhiteMove
+      ? Math.max(0, prev.value - curr.value)
+      : Math.max(0, curr.value - prev.value);
+
+    result.set(i - 1, classifyMove(cpLoss));
+  }
+  return result;
+}
+
 export function computePostGameStats(
   evalHistory: readonly EvalScore[],
 ): PostGameStats {
@@ -65,9 +75,11 @@ export function computePostGameStats(
   const blackAvgCpLoss =
     blackMoveCount > 0 ? blackCpLossTotal / blackMoveCount : 0;
 
-  // Accuracy = 100 - (avgCpLoss / 2), clamped 0-100
-  const whiteAccuracy = Math.max(0, Math.min(100, 100 - whiteAvgCpLoss / 2));
-  const blackAccuracy = Math.max(0, Math.min(100, 100 - blackAvgCpLoss / 2));
+  // Lichess accuracy formula: better distribution across skill levels
+  const acplToAccuracy = (acpl: number) =>
+    Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * acpl) - 3.1669));
+  const whiteAccuracy = acplToAccuracy(whiteAvgCpLoss);
+  const blackAccuracy = acplToAccuracy(blackAvgCpLoss);
 
   const totalAvgCpLoss =
     whiteMoveCount + blackMoveCount > 0

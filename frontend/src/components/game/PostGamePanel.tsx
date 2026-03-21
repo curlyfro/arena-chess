@@ -11,6 +11,9 @@ interface PostGamePanelProps {
   readonly pgn: string;
   readonly onPlayAgain: () => void;
   readonly onNewGame: () => void;
+  readonly onAnalyze?: () => void;
+  readonly isAnalyzing?: boolean;
+  readonly analysisProgress?: number;
 }
 
 function getResultText(
@@ -54,6 +57,9 @@ export const PostGamePanel = memo(function PostGamePanel({
   pgn,
   onPlayAgain,
   onNewGame,
+  onAnalyze,
+  isAnalyzing,
+  analysisProgress,
 }: PostGamePanelProps) {
   const playerWon =
     (playerColor === "w" && result === "1-0") ||
@@ -105,6 +111,20 @@ export const PostGamePanel = memo(function PostGamePanel({
         </div>
       )}
 
+      {isAnalyzing && (
+        <div className="space-y-1">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full rounded-full bg-accent transition-all"
+              style={{ width: `${analysisProgress ?? 0}%` }}
+            />
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            Analyzing... {analysisProgress ?? 0}%
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           onClick={onPlayAgain}
@@ -120,12 +140,22 @@ export const PostGamePanel = memo(function PostGamePanel({
         </button>
       </div>
 
-      <button
-        onClick={handleDownloadPgn}
-        className="rounded bg-muted px-4 py-2 text-sm text-muted-foreground ring-1 ring-border hover:bg-border"
-      >
-        Download PGN
-      </button>
+      <div className="flex gap-2">
+        {onAnalyze && !postGameStats && !isAnalyzing && (
+          <button
+            onClick={onAnalyze}
+            className="flex-1 rounded bg-accent/50 px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/40"
+          >
+            Analyze Game
+          </button>
+        )}
+        <button
+          onClick={handleDownloadPgn}
+          className="flex-1 rounded bg-muted px-4 py-2 text-sm text-muted-foreground ring-1 ring-border hover:bg-border"
+        >
+          Download PGN
+        </button>
+      </div>
     </div>
   );
 });

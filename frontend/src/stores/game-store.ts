@@ -159,7 +159,11 @@ export const useGameStore = create<GameStore>()(
       setEngineBusy: (busy) => set({ engineBusy: busy }),
       pushEval: (evalScore) =>
         set((state) => {
-          state.evalHistory = [...state.evalHistory, evalScore];
+          const MAX_EVAL_HISTORY = 500;
+          const next = [...state.evalHistory, evalScore];
+          state.evalHistory = next.length > MAX_EVAL_HISTORY
+            ? next.slice(-MAX_EVAL_HISTORY)
+            : next;
         }),
       setBestMoveArrow: (arrow) => set({ bestMoveArrow: arrow }),
 
