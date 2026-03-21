@@ -1,4 +1,4 @@
-type SoundType = "move" | "capture" | "check" | "castle" | "lowTime" | "gameEnd" | "checkmate" | "illegal";
+export type SoundType = "move" | "capture" | "check" | "castle" | "lowTime" | "gameEnd" | "checkmate" | "illegal";
 
 let audioCtx: AudioContext | null = null;
 
@@ -6,18 +6,71 @@ function getContext(): AudioContext {
   if (!audioCtx) {
     audioCtx = new AudioContext();
   }
-  // Resume on every call — browsers suspend until user gesture
   if (audioCtx.state === "suspended") {
     audioCtx.resume();
   }
   return audioCtx;
 }
 
+// ── Sample-based audio (preferred) ──
+
+const SAMPLE_PATHS: Partial<Record<SoundType, string>> = {
+  move: "/sounds/move.mp3",
+  capture: "/sounds/capture.mp3",
+  check: "/sounds/check.mp3",
+  castle: "/sounds/castle.mp3",
+  gameEnd: "/sounds/game-end.mp3",
+  checkmate: "/sounds/checkmate.mp3",
+};
+
+const sampleBuffers = new Map<SoundType, AudioBuffer>();
+let samplesLoaded = false;
+
+async function loadSamples(): Promise<void> {
+  if (samplesLoaded) return;
+  samplesLoaded = true;
+
+  const ctx = getContext();
+  const entries = Object.entries(SAMPLE_PATHS) as [SoundType, string][];
+
+  const results = await Promise.allSettled(
+    entries.map(async ([type, path]) => {
+      const response = await fetch(path);
+      if (!response.ok) return;
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      sampleBuffers.set(type, audioBuffer);
+    }),
+  );
+
+  const loaded = results.filter((r) => r.status === "fulfilled").length;
+  if (loaded > 0) {
+    console.debug(`Loaded ${loaded}/${entries.length} sound samples`);
+  }
+}
+
+function playSample(type: SoundType, volume = 0.5): boolean {
+  const buffer = sampleBuffers.get(type);
+  if (!buffer) return false;
+
+  const ctx = getContext();
+  const source = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  source.buffer = buffer;
+  gain.gain.value = volume;
+  source.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+  return true;
+}
+
+// ── Procedural audio (fallback) ──
+
 function playTone(
   frequency: number,
   duration: number,
   type: OscillatorType = "sine",
-  volume: number = 0.3,
+  volume = 0.3,
 ) {
   const ctx = getContext();
   const now = ctx.currentTime;
@@ -35,7 +88,7 @@ function playTone(
   osc.stop(now + duration);
 }
 
-function playNoise(duration: number, volume: number = 0.1) {
+function playNoise(duration: number, volume = 0.1) {
   const ctx = getContext();
   const sampleRate = ctx.sampleRate;
   const bufferSize = Math.floor(sampleRate * duration);
@@ -56,7 +109,7 @@ function playNoise(duration: number, volume: number = 0.1) {
   source.start();
 }
 
-const soundEffects: Record<SoundType, () => void> = {
+const proceduralSounds: Record<SoundType, () => void> = {
   move: () => {
     playNoise(0.06, 0.2);
     playTone(600, 0.06, "sine", 0.15);
@@ -106,15 +159,21 @@ const soundEffects: Record<SoundType, () => void> = {
   },
 };
 
+// ── Public API ──
+
 export function playSound(type: SoundType): void {
   try {
-    soundEffects[type]();
+    // Try sample first, fall back to procedural
+    if (!playSample(type)) {
+      proceduralSounds[type]();
+    }
   } catch {
     // Audio not available
   }
 }
 
-/** Call on first user interaction to ensure AudioContext is unlocked */
+/** Call on first user interaction to unlock AudioContext and preload samples */
 export function initAudio(): void {
   getContext();
+  loadSamples();
 }

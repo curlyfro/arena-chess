@@ -51,7 +51,11 @@ function statusToTermination(status: GameStatus): string {
   return map[status] ?? "resign";
 }
 
-export function GamePage() {
+interface GamePageProps {
+  readonly onNavigatePuzzles?: () => void;
+}
+
+export function GamePage({ onNavigatePuzzles }: GamePageProps) {
   const session = useGameStore((s) => s.session);
   const setSession = useGameStore((s) => s.setSession);
   const storedFen = useGameStore((s) => s.fen);
@@ -563,7 +567,17 @@ export function GamePage() {
   return (
     <div className="flex min-h-dvh flex-col items-center bg-background p-4">
       <div className="mb-4 flex w-full max-w-5xl items-center justify-between">
-        <h1 className="text-lg font-bold text-foreground">♚ ChessArena</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-foreground">♚ ChessArena</h1>
+          {onNavigatePuzzles && (
+            <button
+              onClick={onNavigatePuzzles}
+              className="rounded bg-muted px-3 py-1 text-sm font-medium text-muted-foreground hover:bg-border"
+            >
+              Puzzles
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {authUser ? (
             <>
