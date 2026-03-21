@@ -20,35 +20,82 @@ export interface UsePuzzleReturn {
   readonly retryPuzzle: () => void;
 }
 
+function parseUci(uci: string): ChessMove {
+  return {
+    from: uci.slice(0, 2) as Square,
+    to: uci.slice(2, 4) as Square,
+    promotion: uci.length > 4 ? (uci[4] as ChessMove["promotion"]) : undefined,
+  };
+}
+
 export function usePuzzle(): UsePuzzleReturn {
   const [puzzle, setPuzzle] = useState<Puzzle>(getRandomPuzzle);
   const [status, setStatus] = useState<PuzzleStatus>("playing");
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
 
   const game = useChessGame(puzzle.fen);
-  const moveIndexRef = useRef(0);
-  const opponentTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // moveIndex tracks which move in the solution we're expecting next
+  // moves[0] = setup move (opponent), moves[1] = player's first move, etc.
+  const moveIndexRef = useRef(1); // Start at 1 — setup move is played automatically
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const setupPlayedRef = useRef(false);
 
-  // Player color is determined by whose turn it is in the FEN
-  const playerColor = (puzzle.fen.split(" ")[1] === "w" ? "w" : "b") as PieceColor;
+  // Player color is OPPOSITE of whose turn it is in the FEN
+  // (the FEN side plays the setup move, then the player responds)
+  const fenTurn = puzzle.fen.split(" ")[1] as PieceColor;
+  const playerColor: PieceColor = fenTurn === "w" ? "b" : "w";
 
-  const clearOpponentTimer = useCallback(() => {
-    clearTimeout(opponentTimerRef.current);
+  const clearTimer = useCallback(() => {
+    clearTimeout(timerRef.current);
   }, []);
 
-  // Cleanup timer on unmount
-  useEffect(() => clearOpponentTimer, [clearOpponentTimer]);
+  useEffect(() => clearTimer, [clearTimer]);
+
+  // Play the setup move (moves[0]) automatically after puzzle loads
+  useEffect(() => {
+    if (setupPlayedRef.current) return;
+    if (puzzle.moves.length === 0) return;
+
+    setupPlayedRef.current = true;
+    timerRef.current = setTimeout(() => {
+      const setupMove = parseUci(puzzle.moves[0]);
+      const result = game.makeMove(setupMove);
+      if (result) {
+        setLastMove({ from: result.from as Square, to: result.to as Square });
+      }
+    }, 600);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puzzle.id]);
+
+  const playOpponentResponse = useCallback(
+    (moveIdx: number) => {
+      const opponentUci = puzzle.moves[moveIdx];
+      if (!opponentUci) return;
+
+      timerRef.current = setTimeout(() => {
+        const opMove = parseUci(opponentUci);
+        const result = game.makeMove(opMove);
+        if (result) {
+          setLastMove({ from: result.from as Square, to: result.to as Square });
+        }
+        moveIndexRef.current = moveIdx + 1;
+
+        if (moveIdx + 1 >= puzzle.moves.length) {
+          setStatus("correct");
+        }
+      }, 400);
+    },
+    [puzzle.moves, game.makeMove],
+  );
 
   const tryMove = useCallback(
     (move: ChessMove): boolean => {
       if (status !== "playing") return false;
 
-      // Validate against expected move BEFORE executing
-      const expectedMove = puzzle.moves[moveIndexRef.current];
-      const uciMove = `${move.from}${move.to}${move.promotion ?? ""}`;
+      const expectedUci = puzzle.moves[moveIndexRef.current];
+      const uci = `${move.from}${move.to}${move.promotion ?? ""}`;
 
-      if (uciMove !== expectedMove) {
-        // Execute the wrong move so the player sees it, then mark incorrect
+      if (uci !== expectedUci) {
         const result = game.makeMove(move);
         if (!result) return false;
         setLastMove({ from: result.from as Square, to: result.to as Square });
@@ -56,57 +103,34 @@ export function usePuzzle(): UsePuzzleReturn {
         return true;
       }
 
-      // Execute the correct move
       const result = game.makeMove(move);
       if (!result) return false;
       setLastMove({ from: result.from as Square, to: result.to as Square });
       moveIndexRef.current++;
 
-      // Check if puzzle is complete
       if (moveIndexRef.current >= puzzle.moves.length) {
         setStatus("correct");
         return true;
       }
 
-      // Play the opponent's response after a short delay
-      const opponentMove = puzzle.moves[moveIndexRef.current];
-      if (opponentMove) {
-        opponentTimerRef.current = setTimeout(() => {
-          const from = opponentMove.slice(0, 2);
-          const to = opponentMove.slice(2, 4);
-          const promotion = opponentMove.length > 4 ? opponentMove[4] : undefined;
-          const opResult = game.makeMove({
-            from: from as Square,
-            to: to as Square,
-            promotion: promotion as ChessMove["promotion"],
-          });
-          if (opResult) {
-            setLastMove({ from: opResult.from as Square, to: opResult.to as Square });
-          }
-          moveIndexRef.current++;
-
-          // Check again after opponent's move
-          if (moveIndexRef.current >= puzzle.moves.length) {
-            setStatus("correct");
-          }
-        }, 400);
-      }
-
+      // Play opponent's next response
+      playOpponentResponse(moveIndexRef.current);
       return true;
     },
-    [status, puzzle.moves, game.makeMove],
+    [status, puzzle.moves, game.makeMove, playOpponentResponse],
   );
 
   const loadPuzzle = useCallback(
     (p: Puzzle) => {
-      clearOpponentTimer();
+      clearTimer();
       setPuzzle(p);
       game.reset(p.fen);
-      moveIndexRef.current = 0;
+      moveIndexRef.current = 1;
+      setupPlayedRef.current = false;
       setStatus("playing");
       setLastMove(null);
     },
-    [clearOpponentTimer, game.reset],
+    [clearTimer, game.reset],
   );
 
   const nextPuzzle = useCallback(() => {

@@ -52,9 +52,10 @@ function statusToTermination(status: GameStatus): string {
 
 interface GamePageProps {
   readonly onNavigatePuzzles?: () => void;
+  readonly onNavigateProfile?: () => void;
 }
 
-export function GamePage({ onNavigatePuzzles }: GamePageProps) {
+export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps) {
   const session = useGameStore((s) => s.session);
   const setSession = useGameStore((s) => s.setSession);
   const storedFen = useGameStore((s) => s.fen);
@@ -580,9 +581,12 @@ export function GamePage({ onNavigatePuzzles }: GamePageProps) {
         <div className="flex items-center gap-3">
           {authUser ? (
             <>
-              <span className="text-sm text-foreground font-medium">
+              <button
+                onClick={onNavigateProfile}
+                className="text-sm text-foreground font-medium hover:underline"
+              >
                 {authUser.username}
-              </span>
+              </button>
               {authProfile && (
                 <>
                   <span className="rounded bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">

@@ -58,7 +58,29 @@ export interface PlayerProfile {
     losses: number;
     draws: number;
     winRate: number;
+    currentStreak: number;
+    longestStreak: number;
   };
+  createdAt: string;
+  lastActiveAt: string;
+}
+
+export interface GameSummary {
+  id: string;
+  aiLevel: number;
+  aiElo: number;
+  timeControl: string;
+  isRated: boolean;
+  result: string;
+  eloChange: number;
+  playedAt: string;
+}
+
+export interface RatingHistoryEntry {
+  timeControl: string;
+  rating: number;
+  ratingDeviation: number;
+  recordedAt: string;
 }
 
 export const authApi = {
@@ -87,6 +109,10 @@ export const gameApi = {
 
 export const playerApi = {
   getProfile: (id: string) => api.get<PlayerProfile>(`/players/${id}`),
+  getGames: (id: string, page = 1, pageSize = 20) =>
+    api.get<GameSummary[]>(`/players/${id}/games`, { params: { page, pageSize } }),
+  getRatingHistory: (id: string, timeControl = "blitz", limit = 50) =>
+    api.get<RatingHistoryEntry[]>(`/players/${id}/rating-history`, { params: { timeControl, limit } }),
 };
 
 export default api;
