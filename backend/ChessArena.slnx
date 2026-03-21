@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ChessArena.Api/ChessArena.Api.csproj" />
+    <Project Path="src/ChessArena.Application/ChessArena.Application.csproj" />
+    <Project Path="src/ChessArena.BackgroundJobs/ChessArena.BackgroundJobs.csproj" />
+    <Project Path="src/ChessArena.Core/ChessArena.Core.csproj" />
+    <Project Path="src/ChessArena.Infrastructure/ChessArena.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ChessArena.IntegrationTests/ChessArena.IntegrationTests.csproj" />
+    <Project Path="tests/ChessArena.UnitTests/ChessArena.UnitTests.csproj" />
+  </Folder>
+</Solution>
