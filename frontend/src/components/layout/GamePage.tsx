@@ -19,22 +19,13 @@ import { gameApi } from "@/lib/api";
 import { lookupOpening } from "@/lib/openings";
 import { classifyMoves, computePostGameStats } from "@/lib/move-classifier";
 import { useSound } from "@/hooks/use-sound";
-import type { PieceColor, ChessMove, Square, GameStatus, BoardPiece } from "@/types/chess";
+import type { PieceColor, ChessMove, GameStatus, BoardPiece } from "@/types/chess";
 import type { MoveClassification } from "@/types/chess";
 import type { EvalScore } from "@/types/engine";
 import type { GameSession, PostGameStats } from "@/types/game";
 import { Chess } from "chess.js";
 import { INITIAL_FEN } from "@/constants/chess";
-
-function parseUciMove(uci: string): ChessMove {
-  return {
-    from: uci.slice(0, 2) as Square,
-    to: uci.slice(2, 4) as Square,
-    promotion: uci.length > 4
-      ? (uci[4] as ChessMove["promotion"])
-      : undefined,
-  };
-}
+import { parseUciMove } from "@/lib/uci";
 
 function statusToTermination(status: GameStatus): string {
   const map: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   playerApi,
@@ -39,14 +39,14 @@ function RatingCard({ label, rating }: { readonly label: string; readonly rating
   );
 }
 
-function RatingChart({ history }: { readonly history: readonly RatingHistoryEntry[] }) {
+const RatingChart = memo(function RatingChart({ history }: { readonly history: readonly RatingHistoryEntry[] }) {
   if (history.length < 2) {
     return <div className="text-sm text-muted-foreground text-center py-4">Not enough games for a chart</div>;
   }
 
   const ratings = history.map((h) => h.rating);
-  const min = Math.min(...ratings);
-  const max = Math.max(...ratings);
+  const min = ratings.reduce((a, b) => Math.min(a, b), Infinity);
+  const max = ratings.reduce((a, b) => Math.max(a, b), -Infinity);
   const range = Math.max(max - min, 50);
   const width = 400;
   const height = 120;
@@ -73,7 +73,7 @@ function RatingChart({ history }: { readonly history: readonly RatingHistoryEntr
       <text x={padding} y={height - 2} className="fill-muted-foreground text-[10px]">{min}</text>
     </svg>
   );
-}
+});
 
 function GameRow({ game }: { readonly game: GameSummary }) {
   const resultColor = game.result === "Win"
@@ -116,27 +116,30 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
   const [selectedTc, setSelectedTc] = useState<TimeControl>("blitz");
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async () => {
+  // Fetch profile + games (independent of time control selection)
+  useEffect(() => {
     if (!user) return;
     setLoading(true);
-    try {
-      const [profileRes, gamesRes, historyRes] = await Promise.all([
-        playerApi.getProfile(user.playerId),
-        playerApi.getGames(user.playerId),
-        playerApi.getRatingHistory(user.playerId, selectedTc),
-      ]);
-      setProfile(profileRes.data);
-      setGames(gamesRes.data);
-      setRatingHistory(historyRes.data);
-    } catch {
-      // API may not be running — show what we have from auth store
-    }
-    setLoading(false);
-  }, [user, selectedTc]);
+    Promise.all([
+      playerApi.getProfile(user.playerId),
+      playerApi.getGames(user.playerId),
+    ])
+      .then(([profileRes, gamesRes]) => {
+        setProfile(profileRes.data);
+        setGames(gamesRes.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
 
+  // Fetch rating history (depends on selected time control)
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    if (!user) return;
+    playerApi
+      .getRatingHistory(user.playerId, selectedTc)
+      .then((res) => setRatingHistory(res.data))
+      .catch(() => {});
+  }, [user, selectedTc]);
 
   const authProfile = useAuthStore((s) => s.playerProfile);
   const displayProfile = profile ?? authProfile;
@@ -171,7 +174,7 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
           {/* Header */}
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-2xl font-bold text-foreground">
-              {displayProfile.username[0].toUpperCase()}
+              {(displayProfile.username[0] ?? "?").toUpperCase()}
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground">{displayProfile.username}</h2>

@@ -65,13 +65,15 @@ export interface PlayerProfile {
   lastActiveAt: string;
 }
 
+export type GameResultValue = "Win" | "Loss" | "Draw";
+
 export interface GameSummary {
   id: string;
   aiLevel: number;
   aiElo: number;
   timeControl: string;
   isRated: boolean;
-  result: string;
+  result: GameResultValue;
   eloChange: number;
   playedAt: string;
 }

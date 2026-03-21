@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChessGame } from "./use-chess-game";
 import type { Puzzle } from "@/lib/puzzles";
 import { getRandomPuzzle } from "@/lib/puzzles";
+import { parseUciMove } from "@/lib/uci";
 import type { Square, PieceColor, ChessMove } from "@/types/chess";
 
 export type PuzzleStatus = "playing" | "correct" | "incorrect";
@@ -18,14 +19,6 @@ export interface UsePuzzleReturn {
   readonly tryMove: (move: ChessMove) => boolean;
   readonly nextPuzzle: () => void;
   readonly retryPuzzle: () => void;
-}
-
-function parseUci(uci: string): ChessMove {
-  return {
-    from: uci.slice(0, 2) as Square,
-    to: uci.slice(2, 4) as Square,
-    promotion: uci.length > 4 ? (uci[4] as ChessMove["promotion"]) : undefined,
-  };
 }
 
 export function usePuzzle(): UsePuzzleReturn {
@@ -58,7 +51,7 @@ export function usePuzzle(): UsePuzzleReturn {
 
     setupPlayedRef.current = true;
     timerRef.current = setTimeout(() => {
-      const setupMove = parseUci(puzzle.moves[0]);
+      const setupMove = parseUciMove(puzzle.moves[0]);
       const result = game.makeMove(setupMove);
       if (result) {
         setLastMove({ from: result.from as Square, to: result.to as Square });
@@ -73,7 +66,7 @@ export function usePuzzle(): UsePuzzleReturn {
       if (!opponentUci) return;
 
       timerRef.current = setTimeout(() => {
-        const opMove = parseUci(opponentUci);
+        const opMove = parseUciMove(opponentUci);
         const result = game.makeMove(opMove);
         if (result) {
           setLastMove({ from: result.from as Square, to: result.to as Square });
