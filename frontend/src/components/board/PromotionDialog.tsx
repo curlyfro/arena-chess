@@ -66,6 +66,7 @@ export function PromotionDialog({
         width={BOARD_SIZE}
         height={BOARD_SIZE}
         fill="rgba(0,0,0,0.3)"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={onCancel}
       />
       {PROMOTION_PIECES.map((piece, i) => {
@@ -74,7 +75,8 @@ export function PromotionDialog({
         return (
           <g
             key={piece}
-            onClick={() => onSelect(piece)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onSelect(piece); }}
             style={{ cursor: "pointer" }}
           >
             <rect

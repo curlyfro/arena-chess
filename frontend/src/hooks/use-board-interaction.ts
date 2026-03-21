@@ -77,7 +77,8 @@ export function useBoardInteraction(
 
   const computeTargets = useCallback((square: Square): Square[] => {
     if (!isPlayerTurn()) return [];
-    return getLegalMovesRef.current(square).map((m) => m.to) as Square[];
+    const targets = getLegalMovesRef.current(square).map((m) => m.to);
+    return [...new Set(targets)] as Square[];
   }, []);
 
   const executeMove = useCallback(
@@ -199,13 +200,17 @@ export function useBoardInteraction(
     [computeTargets, executeMove, clearSelection],
   );
 
+  const pendingPromotionRef = useRef(pendingPromotion);
+  pendingPromotionRef.current = pendingPromotion;
+
   const handlePromotionSelect = useCallback(
     (piece: PromotionPiece) => {
-      if (!pendingPromotion) return;
-      executeMove(pendingPromotion.from, pendingPromotion.to, piece);
+      const pp = pendingPromotionRef.current;
+      if (!pp) return;
       setPendingPromotion(null);
+      executeMove(pp.from, pp.to, piece);
     },
-    [pendingPromotion, executeMove],
+    [executeMove],
   );
 
   const handlePromotionCancel = useCallback(() => {

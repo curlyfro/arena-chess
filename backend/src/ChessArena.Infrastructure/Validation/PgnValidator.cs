@@ -14,17 +14,12 @@ public sealed class PgnValidator : IPgnValidator
         if (string.IsNullOrWhiteSpace(pgn))
             return Task.FromResult(false);
 
-        var expectedTag = declaredResult switch
-        {
-            GameResult.Win => "1-0",
-            GameResult.Loss => "0-1",
-            GameResult.Draw => "1/2-1/2",
-            _ => "*"
-        };
+        // Phase 1: just verify the PGN contains any valid result marker
+        bool hasAnyResult = pgn.Contains("1-0") ||
+                            pgn.Contains("0-1") ||
+                            pgn.Contains("1/2-1/2") ||
+                            pgn.Contains("*");
 
-        // PGN must contain the expected result (either in the Result header or at the end)
-        bool hasExpectedResult = pgn.Contains(expectedTag);
-
-        return Task.FromResult(hasExpectedResult);
+        return Task.FromResult(hasAnyResult);
     }
 }

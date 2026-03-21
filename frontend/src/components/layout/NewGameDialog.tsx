@@ -1,5 +1,6 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { initAudio } from "@/lib/sounds";
 import { ENGINE_LEVELS } from "@/constants/engine-levels";
 import { TIME_CONTROLS, DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import type { PieceColor } from "@/types/chess";
@@ -23,6 +24,7 @@ export function NewGameDialog({ open, onStart }: NewGameDialogProps) {
   );
 
   const handleStart = () => {
+    initAudio(); // Unlock AudioContext on user gesture
     const playerColor: PieceColor =
       colorChoice === "random"
         ? Math.random() < 0.5

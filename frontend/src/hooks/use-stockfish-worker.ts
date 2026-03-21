@@ -79,8 +79,11 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     setEngineStatus("thinking");
     pendingLevelRef.current = level;
 
-    // Configure difficulty
     bridge.send(`setoption name Skill Level value ${level.skillLevel}`);
+    bridge.send(`setoption name UCI_LimitStrength value ${level.limitStrength}`);
+    if (level.limitStrength) {
+      bridge.send(`setoption name UCI_Elo value ${level.elo}`);
+    }
     bridge.send(`position fen ${fen}`);
     bridge.send(`go depth ${level.depth} movetime ${level.moveTimeMs}`);
 

@@ -65,10 +65,15 @@ export interface UseChessGameReturn {
   readonly board: readonly (BoardPiece | null)[][];
 }
 
-export function useChessGame(initialFen?: string): UseChessGameReturn {
+export function useChessGame(
+  initialFen?: string,
+  initialHistory?: readonly AnnotatedMove[],
+): UseChessGameReturn {
   const chessRef = useRef(new Chess(initialFen ?? INITIAL_FEN));
   const [version, setVersion] = useState(0);
-  const [annotatedHistory, setAnnotatedHistory] = useState<AnnotatedMove[]>([]);
+  const [annotatedHistory, setAnnotatedHistory] = useState<AnnotatedMove[]>(
+    initialHistory ? [...initialHistory] : [],
+  );
   const [extraStatus, setExtraStatus] = useState<GameStatus | undefined>();
   const [terminatingColor, setTerminatingColor] = useState<PieceColor | undefined>();
 

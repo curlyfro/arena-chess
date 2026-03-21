@@ -1,5 +1,8 @@
+using System.Text;
 using System.Threading.RateLimiting;
 using ChessArena.Api.Middleware;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using ChessArena.Application.Services;
 using ChessArena.Application.Validators;
 using ChessArena.Core.Interfaces;
@@ -30,10 +33,42 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         options.User.RequireUniqueEmail = true;
-        options.SignIn.RequireConfirmedEmail = true;
+        options.SignIn.RequireConfirmedEmail = false;
+        options.Password.RequiredLength = 8;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireDigit = false;
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
+
+// ── JWT Authentication ──
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? (builder.Environment.IsDevelopment()
+        ? "ChessArena-Dev-Secret-Key-Min-32-Chars!!"
+        : throw new InvalidOperationException("Jwt:Key must be configured in production"));
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ChessArena";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "ChessArena";
+
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 // ── HybridCache ──
 builder.Services.AddHybridCache(options =>

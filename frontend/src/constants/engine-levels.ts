@@ -1,9 +1,9 @@
 import type { EngineLevel } from "@/types/engine";
 
 /**
- * 8 difficulty levels matching spec section 4.3.2 exactly.
- * SF Skill = Stockfish UCI "Skill Level" parameter (0-20).
- * Levels 1-4 get artificial delay to prevent jarring instant moves.
+ * 8 difficulty levels matching spec section 4.3.2.
+ * Levels 1-6 use UCI_LimitStrength + UCI_Elo for accurate strength targeting.
+ * Levels 7-8 play at full strength with Skill Level only.
  */
 export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
@@ -14,6 +14,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 50,
     artificialDelayMs: 800,
     elo: 400,
+    limitStrength: true,
     description: "Total novice",
   },
   {
@@ -24,6 +25,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 100,
     artificialDelayMs: 600,
     elo: 600,
+    limitStrength: true,
     description: "Casual learner",
   },
   {
@@ -34,6 +36,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 200,
     artificialDelayMs: 400,
     elo: 800,
+    limitStrength: true,
     description: "Knows the rules",
   },
   {
@@ -44,6 +47,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 300,
     artificialDelayMs: 300,
     elo: 1000,
+    limitStrength: true,
     description: "Casual club",
   },
   {
@@ -54,6 +58,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 500,
     artificialDelayMs: 0,
     elo: 1200,
+    limitStrength: true,
     description: "Improving club",
   },
   {
@@ -64,6 +69,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 750,
     artificialDelayMs: 0,
     elo: 1500,
+    limitStrength: true,
     description: "Competitive club",
   },
   {
@@ -74,6 +80,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 1000,
     artificialDelayMs: 0,
     elo: 1800,
+    limitStrength: false,
     description: "Tournament player",
   },
   {
@@ -84,11 +91,11 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     moveTimeMs: 2000,
     artificialDelayMs: 0,
     elo: 2500,
+    limitStrength: false,
     description: "Expert/GM sparring",
   },
 ] as const;
 
-/** Map AI level (1-8) to its fixed Elo equivalent */
 export const AI_ELO_MAP: ReadonlyMap<number, number> = new Map(
   ENGINE_LEVELS.map((l) => [l.level, l.elo]),
 );

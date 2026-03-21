@@ -6,6 +6,7 @@ export interface EngineLevel {
   readonly moveTimeMs: number;
   readonly artificialDelayMs: number;
   readonly elo: number;
+  readonly limitStrength: boolean;
   readonly description: string;
 }
 

@@ -125,7 +125,7 @@ export const useGameStore = create<GameStore>()(
       boardThemeId: "dark-green",
       pieceSet: "merida" as PieceSet,
       boardFlipped: false,
-      soundEnabled: false,
+      soundEnabled: true,
       showCoordinates: true,
       showEvalBar: true,
 
@@ -172,14 +172,32 @@ export const useGameStore = create<GameStore>()(
       resetGame: () => set(initialGameState),
     })),
     {
-      name: "chess-arena-prefs",
+      name: "chess-arena-state",
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 2) {
+          state.soundEnabled = true;
+        }
+        return state as typeof persisted;
+      },
       partialize: (state) => ({
+        // Preferences
         boardThemeId: state.boardThemeId,
         pieceSet: state.pieceSet,
         boardFlipped: state.boardFlipped,
         soundEnabled: state.soundEnabled,
         showCoordinates: state.showCoordinates,
         showEvalBar: state.showEvalBar,
+        // Active game (restored on reload)
+        session: state.session,
+        fen: state.fen,
+        history: state.history,
+        status: state.status,
+        result: state.result,
+        turn: state.turn,
+        clock: state.clock,
+        lastMove: state.lastMove,
       }),
     },
   ),

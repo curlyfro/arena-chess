@@ -14,6 +14,7 @@ export interface UseGameClockReturn {
   readonly pause: () => void;
   readonly resume: () => void;
   readonly reset: (timeControl: TimeControlPreset) => void;
+  readonly restore: (white: number, black: number, active: PieceColor | null) => void;
 }
 
 export function useGameClock(
@@ -171,6 +172,23 @@ export function useGameClock(
     [whiteMs, blackMs],
   );
 
+  const restore = useCallback(
+    (white: number, black: number, active: PieceColor | null) => {
+      stopLoop();
+      whiteMsRef.current = white;
+      blackMsRef.current = black;
+      activeColorRef.current = active;
+      setWhiteMs(white);
+      setBlackMs(black);
+      setActiveColor(active);
+      setFlaggedColor(null);
+      if (active) {
+        startLoop();
+      }
+    },
+    [stopLoop, startLoop],
+  );
+
   return {
     whiteMs,
     blackMs,
@@ -183,5 +201,6 @@ export function useGameClock(
     pause,
     resume,
     reset,
+    restore,
   };
 }
