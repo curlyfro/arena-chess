@@ -24,16 +24,16 @@ const SAMPLE_PATHS: Partial<Record<SoundType, string>> = {
 };
 
 const sampleBuffers = new Map<SoundType, AudioBuffer>();
-let samplesLoaded = false;
+let sampleLoadState: "idle" | "loading" | "done" = "idle";
 
 async function loadSamples(): Promise<void> {
-  if (samplesLoaded) return;
-  samplesLoaded = true;
+  if (sampleLoadState !== "idle") return;
+  sampleLoadState = "loading";
 
   const ctx = getContext();
   const entries = Object.entries(SAMPLE_PATHS) as [SoundType, string][];
 
-  const results = await Promise.allSettled(
+  await Promise.allSettled(
     entries.map(async ([type, path]) => {
       const response = await fetch(path);
       if (!response.ok) return;
@@ -43,9 +43,12 @@ async function loadSamples(): Promise<void> {
     }),
   );
 
-  const loaded = results.filter((r) => r.status === "fulfilled").length;
-  if (loaded > 0) {
-    console.debug(`Loaded ${loaded}/${entries.length} sound samples`);
+  if (sampleBuffers.size > 0) {
+    sampleLoadState = "done";
+    console.debug(`Loaded ${sampleBuffers.size}/${entries.length} sound samples`);
+  } else {
+    // Allow retry if no samples loaded (e.g., files not present yet)
+    sampleLoadState = "idle";
   }
 }
 

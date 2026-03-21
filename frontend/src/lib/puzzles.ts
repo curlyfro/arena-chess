@@ -7,15 +7,13 @@ export interface Puzzle {
 }
 
 /**
- * Curated puzzle set. Each puzzle starts with a setup move (played automatically),
- * then the player must find the correct sequence.
+ * Curated puzzle set.
  *
- * Format: FEN is the position BEFORE the setup move. moves[0] is the setup move
- * (opponent's last move), moves[1] is the player's first correct move, etc.
+ * Format: FEN is the position to solve. moves[] is the expected UCI move
+ * sequence — moves[0] is the player's move, moves[1] is the opponent's
+ * response, moves[2] is the player's next move, etc.
  *
- * Source: Adapted from Lichess puzzle database (CC0).
- * To expand: download from https://database.lichess.org/#puzzles
- * and convert to this format.
+ * To expand: source puzzles from https://database.lichess.org/#puzzles (CC0).
  */
 export const PUZZLES: readonly Puzzle[] = [
   {
@@ -97,10 +95,3 @@ export function getRandomPuzzle(excluding?: string): Puzzle {
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
-export function getPuzzleByRating(target: number, range = 200): Puzzle {
-  const candidates = PUZZLES.filter(
-    (p) => Math.abs(p.rating - target) <= range,
-  );
-  if (candidates.length === 0) return getRandomPuzzle();
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}

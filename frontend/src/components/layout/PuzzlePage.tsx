@@ -3,7 +3,7 @@ import { usePuzzle } from "@/hooks/use-puzzle";
 import { useGameStore } from "@/stores/game-store";
 import { BOARD_THEMES } from "@/constants/board-themes";
 import { ChessBoard } from "@/components/board/ChessBoard";
-import type { ChessMove } from "@/types/chess";
+import { initAudio } from "@/lib/sounds";
 
 interface PuzzlePageProps {
   readonly onBack: () => void;
@@ -22,19 +22,15 @@ export function PuzzlePage({ onBack }: PuzzlePageProps) {
   );
 
   const isFlipped = puzzle.playerColor === "b";
-
-  const handleMove = useCallback(
-    (move: ChessMove): boolean => {
-      return puzzle.tryMove(move);
-    },
-    [puzzle.tryMove],
-  );
-
   const noPremove = useCallback(() => {}, []);
-  const noLegalMoves = useCallback(() => [] as readonly ChessMove[], []);
+
+  // Ensure audio context is unlocked for puzzle page too
+  const handleFirstInteraction = useCallback(() => {
+    initAudio();
+  }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col items-center bg-background p-4">
+    <div className="flex min-h-dvh flex-col items-center bg-background p-4" onPointerDown={handleFirstInteraction}>
       <div className="mb-4 flex w-full max-w-5xl items-center justify-between">
         <h1 className="text-lg font-bold text-foreground">♚ Puzzles</h1>
         <button
@@ -60,12 +56,8 @@ export function PuzzlePage({ onBack }: PuzzlePageProps) {
             lastMove={puzzle.lastMove}
             premove={null}
             bestMoveArrow={null}
-            getLegalMovesForSquare={
-              puzzle.status === "playing"
-                ? puzzle.getLegalMovesForSquare
-                : noLegalMoves
-            }
-            onMove={handleMove}
+            getLegalMovesForSquare={puzzle.getLegalMovesForSquare}
+            onMove={puzzle.tryMove}
             onPremove={noPremove}
           />
         </div>
