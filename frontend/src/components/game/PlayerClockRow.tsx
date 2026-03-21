@@ -30,16 +30,14 @@ export const PlayerClockRow = memo(function PlayerClockRow({
 }: PlayerClockRowProps) {
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 shrink-0">
-        <span className="text-xs font-medium text-muted-foreground truncate block">
-          {isPlayer ? playerName : aiLabel}
-          {!isPlayer && isAiThinking && (
-            <span className="ml-1 animate-pulse">♞</span>
-          )}
-        </span>
-        <CapturedPieces history={history} color={color} pieceSet={pieceSet} />
-      </div>
-      <div className="flex-1">
+      <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground truncate">
+        {isPlayer ? playerName : aiLabel}
+        {!isPlayer && isAiThinking && (
+          <span className="ml-1 animate-pulse">♞</span>
+        )}
+      </span>
+      <CapturedPieces history={history} color={color} pieceSet={pieceSet} />
+      <div className="ml-auto">
         <ClockPanel
           color={color}
           timeMsRef={timeMsRef}

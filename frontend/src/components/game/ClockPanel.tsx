@@ -82,7 +82,7 @@ export const ClockPanel = memo(function ClockPanel({
       aria-label={`${color === "w" ? "White" : "Black"} clock`}
       aria-live={timeClass === "critical" ? "assertive" : "off"}
       className={cn(
-        "flex items-center justify-between rounded-lg px-4 py-2 font-mono text-2xl font-bold transition-colors",
+        "flex items-center justify-end rounded-lg px-4 py-2 font-mono text-2xl font-bold transition-colors",
         isActive ? "ring-2 ring-accent" : "",
         timeClass === "critical"
           ? "animate-pulse bg-red-900/80 text-red-300"
@@ -91,9 +91,6 @@ export const ClockPanel = memo(function ClockPanel({
             : "bg-muted text-foreground",
       )}
     >
-      <span className="text-sm font-normal text-muted-foreground uppercase">
-        {color === "w" ? "White" : "Black"}
-      </span>
       <span ref={displayRef}>{formatTime(timeMs)}</span>
     </div>
   );

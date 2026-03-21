@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Chess } from "chess.js";
 import { StockfishBridge } from "@/workers/stockfish-bridge";
 import type { EngineLevel, EvalScore, EngineStatus } from "@/types/engine";
 
@@ -85,6 +86,26 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     setEngineStatus("thinking");
     pendingLevelRef.current = level;
 
+    // Roll for blunder — pick a random legal move instead of the engine's choice
+    if (level.blunderChance > 0 && Math.random() < level.blunderChance) {
+      try {
+        const chess = new Chess(fen);
+        const moves = chess.moves({ verbose: true });
+        if (moves.length > 0) {
+          const randomMove = moves[Math.floor(Math.random() * moves.length)];
+          const uci = `${randomMove.from}${randomMove.to}${randomMove.promotion ?? ""}`;
+          const delay = level.artificialDelayMs || 500;
+          delayTimerRef.current = setTimeout(() => {
+            setBestMove(uci);
+            setEngineStatus("ready");
+          }, delay);
+          return;
+        }
+      } catch {
+        // Fall through to normal engine move
+      }
+    }
+
     bridge.send(`setoption name Skill Level value ${level.skillLevel}`);
     bridge.send(`setoption name UCI_LimitStrength value ${level.limitStrength}`);
     if (level.limitStrength) {
@@ -93,7 +114,6 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     bridge.send(`position fen ${fen}`);
     bridge.send(`go depth ${level.depth} movetime ${level.moveTimeMs}`);
 
-    // Listen for bestmove response
     const unsubscribe = bridge.onMessage((msg) => {
       if (msg.evaluation) {
         setEvaluation(msg.evaluation);
@@ -105,7 +125,6 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
         const delay = currentLevel?.artificialDelayMs ?? 0;
 
         if (delay > 0) {
-          // Add artificial delay for lower levels (L1-4)
           delayTimerRef.current = setTimeout(() => {
             setBestMove(msg.bestMove!);
             setEngineStatus("ready");

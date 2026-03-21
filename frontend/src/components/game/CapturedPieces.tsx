@@ -72,17 +72,17 @@ export const CapturedPieces = memo(function CapturedPieces({
   const capturedColor: PieceColor = color === "w" ? "b" : "w";
 
   return (
-    <div className="flex items-center gap-0.5 h-5">
+    <div className="flex items-center -space-x-1 h-7">
       {pieces.map((piece, i) => (
         <img
           key={`${piece}-${i}`}
           src={getPieceUrl(capturedColor, piece, pieceSet)}
           alt={piece}
-          className="h-4 w-4 opacity-70"
+          className="h-7 w-7 drop-shadow-[0_0_1px_rgba(255,255,255,0.8)]"
         />
       ))}
       {advantage > 0 && (
-        <span className="ml-1 text-xs font-medium text-muted-foreground">
+        <span className="ml-1 text-xs font-bold text-muted-foreground">
           +{advantage}
         </span>
       )}

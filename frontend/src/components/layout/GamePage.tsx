@@ -13,6 +13,9 @@ import { MoveHistory } from "@/components/game/MoveHistory";
 import { GameControls } from "@/components/game/GameControls";
 import { ThinkingIndicator } from "@/components/game/ThinkingIndicator";
 import { PostGamePanel } from "@/components/game/PostGamePanel";
+import { EvalGraph } from "@/components/game/EvalGraph";
+import { MoveAnnotation } from "@/components/game/MoveAnnotation";
+import { ReplayControls } from "@/components/game/ReplayControls";
 import { NewGameDialog } from "./NewGameDialog";
 import { AuthModal } from "./AuthModal";
 import { gameApi } from "@/lib/api";
@@ -73,7 +76,7 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
   const [showNewGameDialog, setShowNewGameDialog] = useState(!session || !hasActiveGame);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
-  const [eloChange, setEloChange] = useState<number | null>(null);
+  const [eloResult, setEloResult] = useState<{ change: number; after: number } | null>(null);
   const [drawOfferStatus, setDrawOfferStatus] = useState<"offered" | "accepted" | "declined" | null>(null);
   const [viewingMoveIndex, setViewingMoveIndex] = useState<number | null>(null);
   const [gameSubmitError, setGameSubmitError] = useState<string | null>(null);
@@ -164,6 +167,27 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
 
   const handleReturnToLive = useCallback(() => {
     setViewingMoveIndex(null);
+  }, []);
+
+  const handleGoToStart = useCallback(() => {
+    setViewingMoveIndex(0);
+  }, []);
+
+  const handleGoBack = useCallback(() => {
+    const len = gameRef.current.history.length;
+    setViewingMoveIndex((prev) => {
+      if (prev == null) return len - 2 >= 0 ? len - 2 : 0;
+      return Math.max(0, prev - 1);
+    });
+  }, []);
+
+  const handleGoForward = useCallback(() => {
+    const len = gameRef.current.history.length;
+    setViewingMoveIndex((prev) => {
+      if (prev == null) return null;
+      if (prev >= len - 1) return null;
+      return prev + 1;
+    });
   }, []);
 
   // Keyboard navigation for move history
@@ -324,7 +348,7 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
       setLastMove(null);
       setShowNewGameDialog(false);
       setAiThinking(false);
-      setEloChange(null);
+      setEloResult(null);
       setGameSubmitError(null);
       setDrawOfferStatus(null);
       setViewingMoveIndex(null);
@@ -435,9 +459,11 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     const durationSeconds = Math.round((Date.now() - gameStartTimeRef.current) / 1000);
     const pgn = gameRef.current.pgn() + " " + game.result;
 
+    const timeControl = sess.timeControl.category;
+
     gameApi.submit({
       aiLevel: sess.engineLevel.level,
-      timeControl: sess.timeControl.category,
+      timeControl,
       isRated: true,
       result: playerResult,
       termination: statusToTermination(game.status),
@@ -446,13 +472,40 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
       accuracyPlayer: 0,
       durationSeconds,
     }).then(({ data }) => {
-      setEloChange(data.eloChange);
+      setEloResult({ change: data.eloChange, after: data.eloAfter });
       setGameSubmitError(null);
+
+      // Optimistically update the displayed rating immediately
+      const currentProfile = useAuthStore.getState().playerProfile;
+      if (currentProfile) {
+        const updatedProfile = {
+          ...currentProfile,
+          title: data.newTitle ?? currentProfile.title,
+          eloBullet: timeControl === "bullet" ? data.eloAfter : currentProfile.eloBullet,
+          eloBlitz: timeControl === "blitz" ? data.eloAfter : currentProfile.eloBlitz,
+          eloRapid: timeControl === "rapid" ? data.eloAfter : currentProfile.eloRapid,
+          stats: {
+            ...currentProfile.stats,
+            totalGames: currentProfile.stats.totalGames + 1,
+            wins: currentProfile.stats.wins + (playerResult === "win" ? 1 : 0),
+            losses: currentProfile.stats.losses + (playerResult === "loss" ? 1 : 0),
+            draws: currentProfile.stats.draws + (playerResult === "draw" ? 1 : 0),
+            winRate: (() => {
+              const newTotal = currentProfile.stats.totalGames + 1;
+              const newWins = currentProfile.stats.wins + (playerResult === "win" ? 1 : 0);
+              return newTotal > 0 ? (newWins / newTotal) * 100 : 0;
+            })(),
+          },
+        };
+        useAuthStore.setState({ playerProfile: updatedProfile });
+      }
+
+      // Also refresh from API for authoritative data
       authRefreshProfileRef.current();
     }).catch((err) => {
       console.error("Failed to submit game:", err?.response?.data ?? err);
       setGameSubmitError("Failed to save game result. Your rating was not updated.");
-      gameSubmittedRef.current = false; // Allow retry
+      gameSubmittedRef.current = false;
     });
   }, [game.isGameOver, game.result, game.status]);
 
@@ -546,6 +599,36 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     return bestMoveArrow;
   }, [viewingMoveIndex, analysisBestMoves, bestMoveArrow]);
 
+  // Derive annotation data for the currently viewed move
+  const viewedClassification = viewingMoveIndex != null
+    ? classifications.get(viewingMoveIndex)
+    : undefined;
+
+  const viewedAnnotation = useMemo(() => {
+    if (viewingMoveIndex == null || !viewedClassification) return null;
+    if (viewedClassification === "best" || viewedClassification === "good" || viewedClassification === "great" || viewedClassification === "brilliant") return null;
+    const move = game.history[viewingMoveIndex];
+    if (!move) return null;
+    const evalBefore = analysisEvals[viewingMoveIndex];
+    const evalAfter = analysisEvals[viewingMoveIndex + 1];
+    const bestMoveUci = analysisBestMoves[viewingMoveIndex];
+    if (!evalBefore || !evalAfter || !bestMoveUci) return null;
+    const fenBefore = viewingMoveIndex === 0
+      ? INITIAL_FEN
+      : game.history[viewingMoveIndex - 1].fen;
+    return {
+      moveIndex: viewingMoveIndex,
+      classification: viewedClassification,
+      playedMoveSan: move.san,
+      bestMoveUci,
+      fenBefore,
+      evalBefore,
+      evalAfter,
+    };
+  }, [viewingMoveIndex, viewedClassification, game.history, analysisEvals, analysisBestMoves]);
+
+  const isAnalysisMode = game.isGameOver && postGameStats !== null;
+
   const topColor: PieceColor = isFlipped ? "w" : "b";
   const bottomColor: PieceColor = isFlipped ? "b" : "w";
   const topIsPlayer = topColor === playerColor;
@@ -560,6 +643,14 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
       <div className="mb-4 flex w-full max-w-5xl items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold text-foreground">♚ ChessArena</h1>
+          {session && (
+            <button
+              onClick={() => setShowNewGameDialog(true)}
+              className="rounded bg-muted px-3 py-1 text-sm font-medium text-muted-foreground hover:bg-border"
+            >
+              New Game
+            </button>
+          )}
           {onNavigatePuzzles && (
             <button
               onClick={onNavigatePuzzles}
@@ -705,6 +796,15 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
               </div>
             )}
 
+            {isAnalysisMode && (
+              <EvalGraph
+                evals={analysisEvals}
+                currentIndex={viewingMoveIndex ?? game.history.length - 1}
+                totalMoves={game.history.length}
+                onSelectMove={handleSelectMove}
+              />
+            )}
+
             <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-muted p-2">
               <MoveHistory
                 history={game.history}
@@ -712,7 +812,7 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
                 classifications={classifications}
                 onSelectMove={handleSelectMove}
               />
-              {viewingMoveIndex != null && (
+              {viewingMoveIndex != null && !isAnalysisMode && (
                 <button
                   onClick={handleReturnToLive}
                   className="mt-1 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
@@ -721,6 +821,21 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
                 </button>
               )}
             </div>
+
+            {viewedAnnotation && (
+              <MoveAnnotation {...viewedAnnotation} />
+            )}
+
+            {isAnalysisMode && (
+              <ReplayControls
+                totalMoves={game.history.length}
+                currentIndex={viewingMoveIndex}
+                onGoToStart={handleGoToStart}
+                onGoBack={handleGoBack}
+                onGoForward={handleGoForward}
+                onGoToEnd={handleReturnToLive}
+              />
+            )}
 
             <GameControls
               isGameOver={game.isGameOver}
@@ -758,11 +873,11 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
                   isAnalyzing={isAnalyzing}
                   analysisProgress={analysisProgress}
                 />
-                {eloChange !== null && (
+                {eloResult && (
                   <div className="rounded-lg bg-muted p-3 text-center text-sm">
-                    <span className="text-muted-foreground">Rating: </span>
-                    <span className={eloChange > 0 ? "text-success font-bold" : eloChange < 0 ? "text-destructive font-bold" : "text-foreground"}>
-                      {eloChange > 0 ? `+${eloChange}` : eloChange}
+                    <span className="text-foreground font-bold">{eloResult.after}</span>
+                    <span className={`ml-2 ${eloResult.change > 0 ? "text-success" : eloResult.change < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                      ({eloResult.change > 0 ? `+${eloResult.change}` : eloResult.change === 0 ? "±0" : eloResult.change})
                     </span>
                   </div>
                 )}

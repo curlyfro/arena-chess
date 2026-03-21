@@ -1,9 +1,11 @@
 import type { EngineLevel } from "@/types/engine";
 
 /**
- * 8 difficulty levels matching spec section 4.3.2.
- * Levels 1-6 use UCI_LimitStrength + UCI_Elo for accurate strength targeting.
+ * 8 difficulty levels.
+ * Levels 1-6 use UCI_LimitStrength + UCI_Elo for strength targeting.
  * Levels 7-8 play at full strength with Skill Level only.
+ * blunderChance adds random move injection to weaken lower levels
+ * (Stockfish's UCI_Elo floor is ~1300 regardless of setting).
  */
 export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
@@ -15,50 +17,55 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 800,
     elo: 400,
     limitStrength: true,
+    blunderChance: 0.45,
     description: "Total novice",
   },
   {
     level: 2,
     label: "Novice",
-    skillLevel: 3,
-    depth: 2,
+    skillLevel: 1,
+    depth: 1,
     moveTimeMs: 100,
     artificialDelayMs: 600,
     elo: 600,
     limitStrength: true,
+    blunderChance: 0.3,
     description: "Casual learner",
   },
   {
     level: 3,
     label: "Amateur",
-    skillLevel: 5,
-    depth: 4,
+    skillLevel: 3,
+    depth: 2,
     moveTimeMs: 200,
     artificialDelayMs: 400,
     elo: 800,
     limitStrength: true,
+    blunderChance: 0.2,
     description: "Knows the rules",
   },
   {
     level: 4,
     label: "Club Player",
-    skillLevel: 8,
-    depth: 6,
+    skillLevel: 5,
+    depth: 4,
     moveTimeMs: 300,
     artificialDelayMs: 300,
     elo: 1000,
     limitStrength: true,
+    blunderChance: 0.12,
     description: "Casual club",
   },
   {
     level: 5,
     label: "Intermediate",
-    skillLevel: 11,
-    depth: 8,
+    skillLevel: 8,
+    depth: 6,
     moveTimeMs: 500,
     artificialDelayMs: 0,
     elo: 1200,
     limitStrength: true,
+    blunderChance: 0.06,
     description: "Improving club",
   },
   {
@@ -70,6 +77,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 0,
     elo: 1500,
     limitStrength: true,
+    blunderChance: 0,
     description: "Competitive club",
   },
   {
@@ -81,6 +89,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 0,
     elo: 1800,
     limitStrength: false,
+    blunderChance: 0,
     description: "Tournament player",
   },
   {
@@ -92,6 +101,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 0,
     elo: 2500,
     limitStrength: false,
+    blunderChance: 0,
     description: "Expert/GM sparring",
   },
 ] as const;

@@ -7,6 +7,7 @@ export interface EngineLevel {
   readonly artificialDelayMs: number;
   readonly elo: number;
   readonly limitStrength: boolean;
+  readonly blunderChance: number; // 0-1, probability of playing a random legal move
   readonly description: string;
 }
 
