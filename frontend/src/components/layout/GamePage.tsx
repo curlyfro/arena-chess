@@ -7,13 +7,12 @@ import { useAuthStore } from "@/stores/auth-store";
 import { BOARD_THEMES } from "@/constants/board-themes";
 import { DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import { ChessBoard } from "@/components/board/ChessBoard";
-import { ClockPanel } from "@/components/game/ClockPanel";
+import { PlayerClockRow } from "@/components/game/PlayerClockRow";
 import { EvalBar } from "@/components/game/EvalBar";
 import { MoveHistory } from "@/components/game/MoveHistory";
 import { GameControls } from "@/components/game/GameControls";
 import { ThinkingIndicator } from "@/components/game/ThinkingIndicator";
 import { PostGamePanel } from "@/components/game/PostGamePanel";
-import { CapturedPieces } from "@/components/game/CapturedPieces";
 import { NewGameDialog } from "./NewGameDialog";
 import { AuthModal } from "./AuthModal";
 import { gameApi } from "@/lib/api";
@@ -641,25 +640,18 @@ export function GamePage({ onNavigatePuzzles }: GamePageProps) {
       {session && authUser && (
         <div className="flex w-full max-w-5xl items-start justify-center gap-4">
           <div className="flex w-full max-w-[900px] flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-16 shrink-0">
-                <span className="text-xs font-medium text-muted-foreground truncate block">
-                  {topIsPlayer ? playerName : aiLevelLabel}
-                  {!topIsPlayer && aiThinking && (
-                    <span className="ml-1 animate-pulse">♞</span>
-                  )}
-                </span>
-                <CapturedPieces history={game.history} color={topColor} pieceSet={pieceSet} />
-              </div>
-              <div className="flex-1">
-                <ClockPanel
-                  color={topColor}
-                  timeMsRef={topColor === "w" ? clock.whiteMsRef : clock.blackMsRef}
-                  timeMs={topColor === "w" ? clock.whiteMs : clock.blackMs}
-                  isActive={clock.activeColor === topColor}
-                />
-              </div>
-            </div>
+            <PlayerClockRow
+              color={topColor}
+              isPlayer={topIsPlayer}
+              playerName={playerName}
+              aiLabel={aiLevelLabel}
+              isAiThinking={aiThinking}
+              history={game.history}
+              pieceSet={pieceSet}
+              timeMsRef={topColor === "w" ? clock.whiteMsRef : clock.blackMsRef}
+              timeMs={topColor === "w" ? clock.whiteMs : clock.blackMs}
+              isClockActive={clock.activeColor === topColor}
+            />
 
             <div className="relative">
               {showEvalBar && (
@@ -694,25 +686,18 @@ export function GamePage({ onNavigatePuzzles }: GamePageProps) {
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="w-16 shrink-0">
-                <span className="text-xs font-medium text-muted-foreground truncate block">
-                  {bottomIsPlayer ? playerName : aiLevelLabel}
-                  {!bottomIsPlayer && aiThinking && (
-                    <span className="ml-1 animate-pulse">♞</span>
-                  )}
-                </span>
-                <CapturedPieces history={game.history} color={bottomColor} pieceSet={pieceSet} />
-              </div>
-              <div className="flex-1">
-                <ClockPanel
-                  color={bottomColor}
-                  timeMsRef={bottomColor === "w" ? clock.whiteMsRef : clock.blackMsRef}
-                  timeMs={bottomColor === "w" ? clock.whiteMs : clock.blackMs}
-                  isActive={clock.activeColor === bottomColor}
-                />
-              </div>
-            </div>
+            <PlayerClockRow
+              color={bottomColor}
+              isPlayer={bottomIsPlayer}
+              playerName={playerName}
+              aiLabel={aiLevelLabel}
+              isAiThinking={aiThinking}
+              history={game.history}
+              pieceSet={pieceSet}
+              timeMsRef={bottomColor === "w" ? clock.whiteMsRef : clock.blackMsRef}
+              timeMs={bottomColor === "w" ? clock.whiteMs : clock.blackMs}
+              isClockActive={clock.activeColor === bottomColor}
+            />
           </div>
 
           <div className="hidden w-64 shrink-0 self-start flex-col gap-3 md:flex" style={{ maxHeight: "calc(100vh - 120px)" }}>
