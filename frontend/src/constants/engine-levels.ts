@@ -41,7 +41,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 400,
     elo: 800,
     limitStrength: true,
-    blunderChance: 0.2,
+    blunderChance: 0.15,
     description: "Knows the rules",
   },
   {
@@ -53,7 +53,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 300,
     elo: 1000,
     limitStrength: true,
-    blunderChance: 0.12,
+    blunderChance: 0.08,
     description: "Casual club",
   },
   {
@@ -65,7 +65,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     artificialDelayMs: 0,
     elo: 1200,
     limitStrength: true,
-    blunderChance: 0.06,
+    blunderChance: 0,
     description: "Improving club",
   },
   {
