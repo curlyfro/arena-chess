@@ -2,6 +2,9 @@
 node_modules/
 frontend/node_modules/
 
+# Large binaries (Stockfish WASM >100MB)
+frontend/public/stockfish/
+
 # Build outputs
 frontend/dist/
 backend/**/bin/
