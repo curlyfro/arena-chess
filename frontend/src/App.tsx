@@ -5,6 +5,7 @@ import { PuzzlePage } from "@/components/layout/PuzzlePage";
 import { ProfilePage } from "@/components/layout/ProfilePage";
 import { ReviewPage } from "@/components/layout/ReviewPage";
 import { LeaderboardPage } from "@/components/layout/LeaderboardPage";
+import { OpeningExplorerPage } from "@/components/layout/OpeningExplorerPage";
 import { AchievementToast } from "@/components/ui/AchievementToast";
 import { useGameStore } from "@/stores/game-store";
 
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/puzzles" element={<PuzzlePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/openings" element={<OpeningExplorerPage />} />
           <Route path="/game/:id" element={<ReviewPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

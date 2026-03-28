@@ -167,12 +167,18 @@ export function Dashboard({
       )}
 
       {/* Navigation */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Link
           to="/puzzles"
           className="rounded-lg bg-muted p-3 text-center text-sm font-medium text-foreground hover:bg-border"
         >
           Puzzles
+        </Link>
+        <Link
+          to="/openings"
+          className="rounded-lg bg-muted p-3 text-center text-sm font-medium text-foreground hover:bg-border"
+        >
+          Openings
         </Link>
         <Link
           to="/profile"
