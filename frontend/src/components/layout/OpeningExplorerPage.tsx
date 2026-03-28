@@ -4,6 +4,7 @@ import { useBoardPreferences } from "@/hooks/use-board-theme";
 import { ChessBoard } from "@/components/board/ChessBoard";
 import { ContinuationList } from "@/components/openings/ContinuationList";
 import { MoveHistoryBreadcrumb } from "@/components/openings/MoveHistoryBreadcrumb";
+import { OpeningSearch } from "@/components/openings/OpeningSearch";
 
 const NOOP_PREMOVE = () => {};
 
@@ -67,7 +68,8 @@ export function OpeningExplorerPage() {
 
         {/* Sidebar */}
         <div className="flex w-full flex-col gap-3 md:w-72 md:shrink-0 md:self-start">
-          {/* Move breadcrumb */}
+          <OpeningSearch tree={explorer.tree} onSelect={explorer.playLine} />
+
           <MoveHistoryBreadcrumb
             moves={explorer.moveHistory}
             viewIndex={explorer.viewIndex}

@@ -56,6 +56,44 @@ function toExplorerMove(
   };
 }
 
+export interface OpeningSearchResult {
+  readonly eco: string;
+  readonly name: string;
+  readonly moves: readonly string[];
+}
+
+function collectOpenings(
+  node: OpeningTreeNode,
+  path: string[],
+  results: OpeningSearchResult[],
+) {
+  if (node.eco && node.name) {
+    results.push({ eco: node.eco, name: node.name, moves: [...path] });
+  }
+  if (node.children) {
+    for (const [san, child] of Object.entries(node.children)) {
+      path.push(san);
+      collectOpenings(child, path, results);
+      path.pop();
+    }
+  }
+}
+
+let allOpeningsCache: OpeningSearchResult[] | null = null;
+
+export function searchOpenings(tree: OpeningTreeNode | null, query: string): OpeningSearchResult[] {
+  if (!tree) return [];
+  if (!allOpeningsCache) {
+    allOpeningsCache = [];
+    collectOpenings(tree, [], allOpeningsCache);
+  }
+  if (!query.trim()) return [];
+  const q = query.toLowerCase();
+  return allOpeningsCache
+    .filter((o) => o.name.toLowerCase().includes(q) || o.eco.toLowerCase().includes(q))
+    .slice(0, 20);
+}
+
 export interface UseOpeningExplorerReturn {
   readonly fen: string;
   readonly board: readonly (BoardPiece | null)[][];
@@ -68,11 +106,13 @@ export interface UseOpeningExplorerReturn {
   readonly viewIndex: number;
   readonly playMove: (move: ChessMove) => boolean;
   readonly playMoveBySan: (san: string) => void;
+  readonly playLine: (sanMoves: readonly string[]) => void;
   readonly goToMove: (index: number) => void;
   readonly goToStart: () => void;
   readonly goBack: () => void;
   readonly goForward: () => void;
   readonly lastMove: { from: Square; to: Square } | null;
+  readonly tree: OpeningTreeNode | null;
   readonly isLoading: boolean;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
@@ -206,6 +246,32 @@ export function useOpeningExplorer(): UseOpeningExplorerReturn {
     [truncateIfViewing, commitMove],
   );
 
+  const playLine = useCallback(
+    (sanMoves: readonly string[]) => {
+      const chess = new Chess();
+      const newHistory: ExplorerMove[] = [];
+      let node: OpeningTreeNode | null = tree;
+
+      for (const san of sanMoves) {
+        try {
+          const result = chess.move(san);
+          if (!result) break;
+          const childNode = node?.children?.[result.san] ?? null;
+          newHistory.push(toExplorerMove(result, node));
+          node = childNode;
+        } catch {
+          break;
+        }
+      }
+
+      chessRef.current = chess;
+      setHistory(newHistory);
+      setViewIndex(-1);
+      bump();
+    },
+    [tree, bump],
+  );
+
   const goToStart = useCallback(() => {
     chessRef.current = new Chess();
     setViewIndex(-1);
@@ -258,11 +324,13 @@ export function useOpeningExplorer(): UseOpeningExplorerReturn {
     viewIndex,
     playMove,
     playMoveBySan,
+    playLine,
     goToMove,
     goToStart,
     goBack,
     goForward,
     lastMove,
+    tree,
     isLoading,
     canGoBack: activeHistory.length > 0,
     canGoForward: viewIndex >= 0 && viewIndex < history.length - 1,
