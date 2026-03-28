@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChessGame } from "./use-chess-game";
 import type { Puzzle } from "@/lib/puzzles";
-import { getPuzzleNearRating } from "@/lib/puzzles";
+import { getPuzzleNearRating, loadPuzzles } from "@/lib/puzzles";
 import { usePuzzleStore } from "@/stores/puzzle-store";
 import { parseUciMove } from "@/lib/uci";
 import type { Square, PieceColor, ChessMove } from "@/types/chess";
@@ -19,6 +19,7 @@ export interface UsePuzzleReturn {
   readonly getLegalMovesForSquare: (square: Square) => readonly ChessMove[];
   readonly tryMove: (move: ChessMove) => boolean;
   readonly nextPuzzle: () => void;
+  readonly startPuzzle: (puzzle: Puzzle) => void;
   readonly retryPuzzle: () => void;
   readonly showSolution: () => void;
   readonly solutionShown: boolean;
@@ -35,8 +36,12 @@ export function usePuzzle(): UsePuzzleReturn {
   const totalSolved = usePuzzleStore((s) => s.totalSolved);
   const recordCorrect = usePuzzleStore((s) => s.recordCorrect);
   const recordIncorrect = usePuzzleStore((s) => s.recordIncorrect);
+  const addSeenPuzzle = usePuzzleStore((s) => s.addSeenPuzzle);
 
   const [puzzle, setPuzzle] = useState<Puzzle>(() => getPuzzleNearRating(puzzleRating));
+
+  // Load expanded puzzle database on mount
+  useEffect(() => { loadPuzzles(); }, []);
   const [status, setStatus] = useState<PuzzleStatus>("playing");
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [solutionShown, setSolutionShown] = useState(false);
@@ -94,6 +99,7 @@ export function usePuzzle(): UsePuzzleReturn {
           if (!resultRecordedRef.current) {
             resultRecordedRef.current = true;
             recordCorrect(puzzle.rating);
+            addSeenPuzzle(puzzle.id);
           }
         }
       }, 400);
@@ -130,6 +136,7 @@ export function usePuzzle(): UsePuzzleReturn {
         if (!resultRecordedRef.current) {
           resultRecordedRef.current = true;
           recordCorrect(puzzle.rating);
+          addSeenPuzzle(puzzle.id);
         }
         return true;
       }
@@ -157,8 +164,9 @@ export function usePuzzle(): UsePuzzleReturn {
   );
 
   const nextPuzzle = useCallback(() => {
-    const rating = usePuzzleStore.getState().puzzleRating;
-    loadPuzzle(getPuzzleNearRating(rating, puzzle.id));
+    const state = usePuzzleStore.getState();
+    const seenSet = new Set(state.seenPuzzleIds);
+    loadPuzzle(getPuzzleNearRating(state.puzzleRating, puzzle.id, seenSet));
   }, [puzzle.id, loadPuzzle]);
 
   const retryPuzzle = useCallback(() => {
@@ -203,6 +211,7 @@ export function usePuzzle(): UsePuzzleReturn {
     getLegalMovesForSquare: game.getLegalMovesForSquare,
     tryMove,
     nextPuzzle,
+    startPuzzle: loadPuzzle,
     retryPuzzle,
     showSolution,
     solutionShown,

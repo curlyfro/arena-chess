@@ -1,13 +1,31 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePuzzle } from "@/hooks/use-puzzle";
 import { useBoardPreferences } from "@/hooks/use-board-theme";
+import { usePuzzleStore } from "@/stores/puzzle-store";
+import { getDailyPuzzle } from "@/lib/puzzles";
 import { ChessBoard } from "@/components/board/ChessBoard";
 import { initAudio } from "@/lib/sounds";
 import { Link } from "react-router";
 
 export function PuzzlePage() {
   const puzzle = usePuzzle();
+  const dailyCompletedDates = usePuzzleStore((s) => s.dailyCompletedDates);
+  const addDailyCompletion = usePuzzleStore((s) => s.addDailyCompletion);
+  const getDailyStreak = usePuzzleStore((s) => s.getDailyStreak);
+  const [isPlayingDaily, setIsPlayingDaily] = useState(false);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const isDailyCompleted = dailyCompletedDates.includes(today);
+  const dailyStreak = getDailyStreak();
   const { theme, pieceSet, showCoordinates } = useBoardPreferences();
+
+  // Track daily puzzle completion
+  useEffect(() => {
+    if (isPlayingDaily && puzzle.status === "correct" && !isDailyCompleted) {
+      addDailyCompletion(today);
+      setIsPlayingDaily(false);
+    }
+  }, [isPlayingDaily, puzzle.status, isDailyCompleted, today, addDailyCompletion]);
 
   const isFlipped = puzzle.playerColor === "b";
   const noPremove = useCallback(() => {}, []);
@@ -57,6 +75,30 @@ export function PuzzlePage() {
         </div>
 
         <div className="flex w-full flex-col gap-3 md:w-64 md:shrink-0">
+          {/* Daily puzzle */}
+          <div className="rounded-lg bg-muted p-3 text-center">
+            <div className="text-xs text-muted-foreground uppercase mb-1">Puzzle of the Day</div>
+            {isDailyCompleted ? (
+              <>
+                <div className="text-sm font-bold text-success">Completed!</div>
+                {dailyStreak > 1 && (
+                  <div className="mt-1 text-xs text-muted-foreground">{dailyStreak} day streak</div>
+                )}
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  const daily = getDailyPuzzle(today);
+                  puzzle.startPuzzle(daily);
+                  setIsPlayingDaily(true);
+                }}
+                className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/80"
+              >
+                Solve
+              </button>
+            )}
+          </div>
+
           {/* Player puzzle stats */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-muted p-2">

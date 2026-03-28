@@ -68,17 +68,57 @@ export const PUZZLES: readonly Puzzle[] = [
   { id: "000VW", fen: "r4r2/1p3pkp/p5p1/3R1N1Q/3P4/8/P1q2P2/3R2K1 b - - 3 25", moves: ["g6f5", "d5c5", "c2e4", "h5g5", "g7h8", "g5f6"], rating: 2861, themes: ["crushing", "endgame"] },
 ];
 
+// ── Async puzzle loading from expanded database ──
+
+let loadedPuzzles: Puzzle[] | null = null;
+let loadPromise: Promise<Puzzle[]> | null = null;
+
+export async function loadPuzzles(): Promise<readonly Puzzle[]> {
+  if (loadedPuzzles) return loadedPuzzles;
+  if (!loadPromise) {
+    loadPromise = fetch("/puzzles.json")
+      .then((r) => r.json() as Promise<Puzzle[]>)
+      .then((data) => {
+        loadedPuzzles = data;
+        return data;
+      })
+      .catch(() => {
+        // Fall back to inline puzzles if fetch fails
+        loadedPuzzles = [...PUZZLES];
+        return loadedPuzzles;
+      });
+  }
+  return loadPromise;
+}
+
+/** Returns loaded puzzles synchronously, or inline fallback if not yet loaded. */
+export function getPuzzlesSync(): readonly Puzzle[] {
+  return loadedPuzzles ?? PUZZLES;
+}
+
 export function getRandomPuzzle(excluding?: string): Puzzle {
+  const all = getPuzzlesSync();
   const candidates = excluding
-    ? PUZZLES.filter((p) => p.id !== excluding)
-    : PUZZLES;
+    ? all.filter((p) => p.id !== excluding)
+    : all;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
-export function getPuzzleNearRating(targetRating: number, excluding?: string): Puzzle {
-  const candidates = excluding
-    ? PUZZLES.filter((p) => p.id !== excluding)
-    : [...PUZZLES];
+export function getPuzzleNearRating(
+  targetRating: number,
+  excluding?: string,
+  seenIds?: ReadonlySet<string>,
+): Puzzle {
+  const all = getPuzzlesSync();
+  let candidates = excluding
+    ? all.filter((p) => p.id !== excluding)
+    : [...all];
+
+  // Filter out seen puzzles if we have enough unseen ones
+  if (seenIds && seenIds.size > 0) {
+    const unseen = candidates.filter((p) => !seenIds.has(p.id));
+    if (unseen.length > 10) candidates = unseen;
+  }
 
   // Sort by distance from target rating
   const sorted = candidates
@@ -88,4 +128,14 @@ export function getPuzzleNearRating(targetRating: number, excluding?: string): P
   // Pick from the closest 8 puzzles (or fewer) randomly to add variety
   const pool = sorted.slice(0, Math.min(8, sorted.length));
   return pool[Math.floor(Math.random() * pool.length)].puzzle;
+}
+
+/** Deterministic daily puzzle: same puzzle for all players on a given date. */
+export function getDailyPuzzle(dateStr: string): Puzzle {
+  const all = getPuzzlesSync();
+  let hash = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    hash = ((hash << 5) - hash + dateStr.charCodeAt(i)) | 0;
+  }
+  return all[Math.abs(hash) % all.length];
 }

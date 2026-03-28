@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { playerApi, type GameSummary } from "@/lib/api";
 import { RatingCard } from "@/components/ui/RatingCard";
+import { usePuzzleStore } from "@/stores/puzzle-store";
 import type { UserProfile, PlayerProfile } from "@/lib/api";
 
 interface DashboardProps {
@@ -55,6 +56,11 @@ export function Dashboard({
   onOpenSettings,
 }: DashboardProps) {
   const [recentGames, setRecentGames] = useState<GameSummary[]>([]);
+  const dailyCompletedDates = usePuzzleStore((s) => s.dailyCompletedDates);
+  const getDailyStreak = usePuzzleStore((s) => s.getDailyStreak);
+  const today = new Date().toISOString().slice(0, 10);
+  const isDailyCompleted = dailyCompletedDates.includes(today);
+  const dailyStreak = getDailyStreak();
 
   useEffect(() => {
     if (!authUser) return;
@@ -115,6 +121,26 @@ export function Dashboard({
         >
           New Game
         </button>
+      </div>
+
+      {/* Daily puzzle */}
+      <div className="rounded-lg bg-muted p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium text-muted-foreground">Daily Puzzle</div>
+          {dailyStreak > 1 && (
+            <span className="text-xs text-success font-medium">{dailyStreak} day streak</span>
+          )}
+        </div>
+        {isDailyCompleted ? (
+          <p className="mt-1 text-sm text-success font-medium">Completed today!</p>
+        ) : (
+          <Link
+            to="/puzzles"
+            className="mt-2 inline-block rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/80"
+          >
+            Solve today's puzzle
+          </Link>
+        )}
       </div>
 
       {/* Ratings */}
