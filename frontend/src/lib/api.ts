@@ -201,10 +201,17 @@ export const gameApi = {
     api.patch(`/games/${gameId}/accuracy`, { accuracyPlayer }),
 };
 
+interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export const playerApi = {
   getProfile: (id: string) => api.get<PlayerProfile>(`/players/${id}`),
   getGames: (id: string, page = 1, pageSize = 20) =>
-    api.get<GameSummary[]>(`/players/${id}/games`, { params: { page, pageSize } }),
+    api.get<PaginatedResponse<GameSummary>>(`/players/${id}/games`, { params: { page, pageSize } }),
   getRatingHistory: (id: string, timeControl = "blitz", limit = 50) =>
     api.get<RatingHistoryEntry[]>(`/players/${id}/rating-history`, { params: { timeControl, limit } }),
 };

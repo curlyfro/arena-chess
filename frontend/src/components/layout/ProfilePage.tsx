@@ -108,7 +108,7 @@ export function ProfilePage() {
     ])
       .then(([profileRes, gamesRes]) => {
         setProfile(profileRes.data);
-        setGames(gamesRes.data);
+        setGames(gamesRes.data.data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
