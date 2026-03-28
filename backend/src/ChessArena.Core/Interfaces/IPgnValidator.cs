@@ -4,5 +4,5 @@ namespace ChessArena.Core.Interfaces;
 
 public interface IPgnValidator
 {
-    Task<bool> ValidateAsync(string pgn, GameResult declaredResult, CancellationToken ct = default);
+    Task<bool> ValidateAsync(string pgn, GameResult declaredResult, PlayerColor playerColor, CancellationToken ct = default);
 }

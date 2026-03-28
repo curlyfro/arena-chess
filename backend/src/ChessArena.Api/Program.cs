@@ -10,7 +10,10 @@ using ChessArena.Infrastructure.Cache;
 using ChessArena.Infrastructure.Data;
 using ChessArena.Infrastructure.Identity;
 using ChessArena.Infrastructure.Repositories;
+using ChessArena.Infrastructure.Queries;
 using ChessArena.Infrastructure.Validation;
+using ChessArena.Application.Queries;
+using ChessArena.BackgroundJobs;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Identity;
@@ -80,6 +83,9 @@ builder.Services.AddHybridCache(options =>
     };
 });
 
+// ── Unit of Work ──
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
 // ── Application Services ──
 builder.Services.AddSingleton<IEloRatingService, EloRatingService>();
 builder.Services.AddSingleton<TitleAwardService>();
@@ -91,6 +97,10 @@ builder.Services.AddScoped<ISessionCapService, SessionCapService>();
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IRatingHistoryRepository, RatingHistoryRepository>();
+
+// ── Queries ──
+builder.Services.AddScoped<IPlayerStatsQuery, PlayerStatsQuery>();
+builder.Services.AddScoped<ILeaderboardQuery, LeaderboardQuery>();
 
 // ── FluentValidation ──
 builder.Services.AddFluentValidationAutoValidation();
@@ -113,12 +123,15 @@ builder.Services.AddRateLimiter(options =>
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new System.Threading.RateLimiting.TokenBucketRateLimiterOptions
             {
-                TokenLimit = 300,
+                TokenLimit = 15,
                 ReplenishmentPeriod = TimeSpan.FromMinutes(1),
-                TokensPerPeriod = 300
+                TokensPerPeriod = 10
             }));
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
+
+// ── Background Jobs ──
+builder.Services.AddHostedService<CleanupService>();
 
 // ── Middleware ──
 builder.Services.AddTransient<GlobalExceptionHandler>();

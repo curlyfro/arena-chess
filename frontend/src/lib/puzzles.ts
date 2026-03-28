@@ -74,3 +74,18 @@ export function getRandomPuzzle(excluding?: string): Puzzle {
     : PUZZLES;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
+
+export function getPuzzleNearRating(targetRating: number, excluding?: string): Puzzle {
+  const candidates = excluding
+    ? PUZZLES.filter((p) => p.id !== excluding)
+    : [...PUZZLES];
+
+  // Sort by distance from target rating
+  const sorted = candidates
+    .map((p) => ({ puzzle: p, distance: Math.abs(p.rating - targetRating) }))
+    .sort((a, b) => a.distance - b.distance);
+
+  // Pick from the closest 8 puzzles (or fewer) randomly to add variety
+  const pool = sorted.slice(0, Math.min(8, sorted.length));
+  return pool[Math.floor(Math.random() * pool.length)].puzzle;
+}

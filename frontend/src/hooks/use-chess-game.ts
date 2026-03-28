@@ -69,14 +69,20 @@ export interface UseChessGameReturn {
 export function useChessGame(
   initialFen?: string,
   initialHistory?: readonly AnnotatedMove[],
+  initialStatus?: GameStatus,
+  initialTerminatingColor?: PieceColor,
 ): UseChessGameReturn {
   const chessRef = useRef(new Chess(initialFen ?? INITIAL_FEN));
   const [version, setVersion] = useState(0);
   const [annotatedHistory, setAnnotatedHistory] = useState<AnnotatedMove[]>(
     initialHistory ? [...initialHistory] : [],
   );
-  const [extraStatus, setExtraStatus] = useState<GameStatus | undefined>();
-  const [terminatingColor, setTerminatingColor] = useState<PieceColor | undefined>();
+  const [extraStatus, setExtraStatus] = useState<GameStatus | undefined>(
+    initialStatus === "resigned" || initialStatus === "flagged" || initialStatus === "draw_agreement"
+      ? initialStatus
+      : undefined,
+  );
+  const [terminatingColor, setTerminatingColor] = useState<PieceColor | undefined>(initialTerminatingColor);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 

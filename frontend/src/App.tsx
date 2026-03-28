@@ -1,30 +1,27 @@
-import { useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GamePage } from "@/components/layout/GamePage";
 import { PuzzlePage } from "@/components/layout/PuzzlePage";
 import { ProfilePage } from "@/components/layout/ProfilePage";
+import { ReviewPage } from "@/components/layout/ReviewPage";
+import { LeaderboardPage } from "@/components/layout/LeaderboardPage";
 import { useGameStore } from "@/stores/game-store";
-
-type Page = "game" | "puzzles" | "profile";
 
 export default function App() {
   const resetGame = useGameStore((s) => s.resetGame);
-  const [page, setPage] = useState<Page>("game");
 
   return (
-    <ErrorBoundary onReset={resetGame}>
-      {page === "game" && (
-        <GamePage
-          onNavigatePuzzles={() => setPage("puzzles")}
-          onNavigateProfile={() => setPage("profile")}
-        />
-      )}
-      {page === "puzzles" && (
-        <PuzzlePage onBack={() => setPage("game")} />
-      )}
-      {page === "profile" && (
-        <ProfilePage onBack={() => setPage("game")} />
-      )}
-    </ErrorBoundary>
+    <BrowserRouter>
+      <ErrorBoundary onReset={resetGame}>
+        <Routes>
+          <Route path="/" element={<GamePage />} />
+          <Route path="/puzzles" element={<PuzzlePage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/game/:id" element={<ReviewPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ErrorBoundary>
+    </BrowserRouter>
   );
 }

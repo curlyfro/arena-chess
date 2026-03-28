@@ -31,9 +31,3 @@ public sealed record RatingHistoryResponse(
     int RatingDeviation,
     DateTime RecordedAt
 );
-
-public sealed record UpdateSettingsRequest(
-    string? BoardTheme,
-    string? PieceSet,
-    bool? SoundEnabled
-);

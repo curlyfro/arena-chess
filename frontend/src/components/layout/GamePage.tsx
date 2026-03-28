@@ -2,66 +2,39 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChessGame } from "@/hooks/use-chess-game";
 import { useStockfishWorker } from "@/hooks/use-stockfish-worker";
 import { useGameClock } from "@/hooks/use-game-clock";
+import { useGameAnalysis } from "@/hooks/use-game-analysis";
+import { useGameSubmission } from "@/hooks/use-game-submission";
+import { useDrawOffer } from "@/hooks/use-draw-offer";
+import { useHistoryNavigation } from "@/hooks/use-history-navigation";
+import { useBoardPreferences } from "@/hooks/use-board-theme";
 import { useGameStore } from "@/stores/game-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { BOARD_THEMES } from "@/constants/board-themes";
 import { DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import { ChessBoard } from "@/components/board/ChessBoard";
 import { PlayerClockRow } from "@/components/game/PlayerClockRow";
 import { EvalBar } from "@/components/game/EvalBar";
-import { MoveHistory } from "@/components/game/MoveHistory";
-import { GameControls } from "@/components/game/GameControls";
-import { ThinkingIndicator } from "@/components/game/ThinkingIndicator";
-import { PostGamePanel } from "@/components/game/PostGamePanel";
-import { EvalGraph } from "@/components/game/EvalGraph";
-import { MoveAnnotation } from "@/components/game/MoveAnnotation";
-import { ReplayControls } from "@/components/game/ReplayControls";
+import { GameHeader } from "@/components/game/GameHeader";
+import { GameSidebar } from "@/components/game/GameSidebar";
 import { NewGameDialog } from "./NewGameDialog";
+import { SettingsDialog } from "./SettingsDialog";
 import { AuthModal } from "./AuthModal";
-import { gameApi } from "@/lib/api";
 import { lookupOpening } from "@/lib/openings";
-import { classifyMoves, computePostGameStats } from "@/lib/move-classifier";
+import { buildViewedAnnotation } from "@/lib/annotation";
 import { useSound } from "@/hooks/use-sound";
-import type { PieceColor, ChessMove, GameStatus, BoardPiece } from "@/types/chess";
-import type { MoveClassification } from "@/types/chess";
-import type { EvalScore } from "@/types/engine";
-import type { GameSession, PostGameStats } from "@/types/game";
-import { Chess } from "chess.js";
-import { INITIAL_FEN } from "@/constants/chess";
 import { parseUciMove } from "@/lib/uci";
+import type { PieceColor, ChessMove } from "@/types/chess";
+import type { GameSession } from "@/types/game";
 
-function statusToTermination(status: GameStatus): string {
-  const map: Record<string, string> = {
-    checkmate: "checkmate",
-    stalemate: "stalemate",
-    draw_repetition: "threefold_repetition",
-    draw_insufficient: "insufficient_material",
-    draw_50move: "fifty_move_rule",
-    draw_agreement: "draw_agreed",
-    resigned: "resign",
-    flagged: "flag",
-  };
-  return map[status] ?? "resign";
-}
-
-interface GamePageProps {
-  readonly onNavigatePuzzles?: () => void;
-  readonly onNavigateProfile?: () => void;
-}
-
-export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps) {
+export function GamePage() {
   const session = useGameStore((s) => s.session);
   const setSession = useGameStore((s) => s.setSession);
   const storedFen = useGameStore((s) => s.fen);
   const storedHistory = useGameStore((s) => s.history);
   const storedStatus = useGameStore((s) => s.status);
   const storedClock = useGameStore((s) => s.clock);
-  const boardThemeId = useGameStore((s) => s.boardThemeId);
-  const pieceSet = useGameStore((s) => s.pieceSet);
   const boardFlipped = useGameStore((s) => s.boardFlipped);
   const flipBoard = useGameStore((s) => s.flipBoard);
-  const showCoordinates = useGameStore((s) => s.showCoordinates);
-  const showEvalBar = useGameStore((s) => s.showEvalBar);
+  const { theme, pieceSet, showCoordinates, showEvalBar } = useBoardPreferences();
   const syncPosition = useGameStore((s) => s.syncPosition);
   const syncClock = useGameStore((s) => s.syncClock);
   const premove = useGameStore((s) => s.premove);
@@ -72,54 +45,45 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
   const setBestMoveArrow = useGameStore((s) => s.setBestMoveArrow);
   const resetGameStore = useGameStore((s) => s.resetGame);
 
-  const hasActiveGame = session && storedStatus === "active";
-  const [showNewGameDialog, setShowNewGameDialog] = useState(!session || !hasActiveGame);
+  const storedResult = useGameStore((s) => s.result);
+  const hasResumableGame = session && storedStatus !== "idle";
+  const [showNewGameDialog, setShowNewGameDialog] = useState(!session || !hasResumableGame);
+  const [showSettings, setShowSettings] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
-  const [eloResult, setEloResult] = useState<{ change: number; after: number } | null>(null);
-  const [drawOfferStatus, setDrawOfferStatus] = useState<"offered" | "accepted" | "declined" | null>(null);
-  const [viewingMoveIndex, setViewingMoveIndex] = useState<number | null>(null);
-  const [gameSubmitError, setGameSubmitError] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [classifications, setClassifications] = useState<ReadonlyMap<number, MoveClassification>>(new Map());
-  const [postGameStats, setPostGameStats] = useState<PostGameStats | null>(null);
-  const [analysisEvals, setAnalysisEvals] = useState<readonly EvalScore[]>([]);
-  const [analysisBestMoves, setAnalysisBestMoves] = useState<readonly string[]>([]);
-  const gameSubmittedRef = useRef(false);
-  const gameStartTimeRef = useRef(Date.now());
 
   const authUser = useAuthStore((s) => s.user);
   const authProfile = useAuthStore((s) => s.playerProfile);
   const authLogout = useAuthStore((s) => s.logout);
   const authLoadUser = useAuthStore((s) => s.loadUser);
-  const authRefreshProfile = useAuthStore((s) => s.refreshProfile);
 
   useEffect(() => {
     authLoadUser();
   }, [authLoadUser]);
 
-  const restoredFen = hasActiveGame ? storedFen : undefined;
-  const restoredHistory = hasActiveGame ? storedHistory : undefined;
-  const game = useChessGame(restoredFen, restoredHistory);
+  const restoredFen = hasResumableGame ? storedFen : undefined;
+  const restoredHistory = hasResumableGame ? storedHistory : undefined;
+
+  const restoredTerminatingColor: PieceColor | undefined =
+    hasResumableGame && (storedStatus === "resigned" || storedStatus === "flagged")
+      ? storedResult === "1-0" ? "b"
+        : storedResult === "0-1" ? "w"
+        : (session?.playerColor ?? "w")
+      : undefined;
+
+  const game = useChessGame(restoredFen, restoredHistory, hasResumableGame ? storedStatus : undefined, restoredTerminatingColor);
   const engine = useStockfishWorker();
   const clock = useGameClock(session?.timeControl ?? DEFAULT_TIME_CONTROL);
   const { playMoveSound, playSound: playSfx } = useSound();
 
   const clockRestoredRef = useRef(false);
   useEffect(() => {
-    if (hasActiveGame && !clockRestoredRef.current && storedClock.activeColor) {
+    if (hasResumableGame && !clockRestoredRef.current && storedClock.activeColor) {
       clock.restore(storedClock.whiteMs, storedClock.blackMs, storedClock.activeColor);
       clockRestoredRef.current = true;
     }
-    // Only run on mount — storedClock is the initial persisted value
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const theme = useMemo(
-    () => BOARD_THEMES.find((t) => t.id === boardThemeId) ?? BOARD_THEMES[1],
-    [boardThemeId],
-  );
 
   const playerColor = session?.playerColor ?? "w";
   const isFlipped = boardFlipped
@@ -129,8 +93,6 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
   const playerName = authUser?.username ?? "Player";
 
   const hintTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const drawTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const drawClearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const gameRef = useRef(game);
   gameRef.current = game;
@@ -140,148 +102,36 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
   engineRef.current = engine;
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const playSfxRef = useRef(playSfx);
+  playSfxRef.current = playSfx;
 
-  // When viewing history, derive board from the selected move's FEN
-  const viewingBoard = useMemo<readonly (BoardPiece | null)[][] | null>(() => {
-    if (viewingMoveIndex == null) return null;
-    const move = game.history[viewingMoveIndex];
-    if (!move) return null;
-    const chess = new Chess(move.fen);
-    return chess.board().map((row) =>
-      row.map((sq) =>
-        sq ? ({ type: sq.type, color: sq.color } as BoardPiece) : null,
-      ),
-    );
-  }, [viewingMoveIndex, game.history]);
+  // ── Extracted hooks ──
 
-  // Return to live position when a new move is made during active game
-  useEffect(() => {
-    if (!game.isGameOver && viewingMoveIndex != null) {
-      setViewingMoveIndex(null);
-    }
-  }, [game.fen, game.isGameOver, viewingMoveIndex]);
+  const { drawOfferStatus, handleOfferDraw, resetDrawOffer } = useDrawOffer(
+    engineRef, gameRef, sessionRef,
+  );
 
-  const handleSelectMove = useCallback((index: number) => {
-    setViewingMoveIndex(index);
-  }, []);
+  const {
+    eloResult, gameSubmitError, submittedGameIdRef, resetSubmission,
+  } = useGameSubmission(
+    sessionRef, gameRef, clockRef, engineRef,
+    setAiThinking, playSfxRef,
+    game.isGameOver, game.status, game.result,
+  );
 
-  const handleReturnToLive = useCallback(() => {
-    setViewingMoveIndex(null);
-  }, []);
+  const {
+    isAnalyzing, analysisProgress, classifications, postGameStats,
+    analysisEvals, analysisBestMoves, handleAnalyzeGame, cancelAnalysis, resetAnalysis,
+  } = useGameAnalysis(engineRef, gameRef, sessionRef, submittedGameIdRef);
 
-  const handleGoToStart = useCallback(() => {
-    setViewingMoveIndex(0);
-  }, []);
+  const {
+    viewingMoveIndex, viewingBoard, setViewingMoveIndex,
+    handleSelectMove, handleReturnToLive,
+    handleGoToStart, handleGoBack, handleGoForward,
+  } = useHistoryNavigation(game.history, game.isGameOver, game.fen, !!session, flipBoard);
 
-  const handleGoBack = useCallback(() => {
-    const len = gameRef.current.history.length;
-    setViewingMoveIndex((prev) => {
-      if (prev == null) return len - 2 >= 0 ? len - 2 : 0;
-      return Math.max(0, prev - 1);
-    });
-  }, []);
+  // ── Sync game state to store for persistence ──
 
-  const handleGoForward = useCallback(() => {
-    const len = gameRef.current.history.length;
-    setViewingMoveIndex((prev) => {
-      if (prev == null) return null;
-      if (prev >= len - 1) return null;
-      return prev + 1;
-    });
-  }, []);
-
-  // Keyboard navigation for move history
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (!session) return;
-
-      const historyLen = gameRef.current.history.length;
-      if (historyLen === 0) return;
-
-      switch (e.key) {
-        case "ArrowLeft": {
-          e.preventDefault();
-          setViewingMoveIndex((prev) => {
-            if (prev == null) return historyLen - 2 >= 0 ? historyLen - 2 : 0;
-            return Math.max(0, prev - 1);
-          });
-          break;
-        }
-        case "ArrowRight": {
-          e.preventDefault();
-          setViewingMoveIndex((prev) => {
-            if (prev == null) return null;
-            if (prev >= historyLen - 1) return null;
-            return prev + 1;
-          });
-          break;
-        }
-        case "Home": {
-          e.preventDefault();
-          setViewingMoveIndex(0);
-          break;
-        }
-        case "End": {
-          e.preventDefault();
-          setViewingMoveIndex(null);
-          break;
-        }
-        case "f": {
-          if (!e.ctrlKey && !e.metaKey) {
-            flipBoard();
-          }
-          break;
-        }
-        case "Escape": {
-          setViewingMoveIndex(null);
-          break;
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [session, flipBoard]);
-
-  const analysisCancelledRef = useRef(false);
-  const handleAnalyzeGame = useCallback(async () => {
-    if (isAnalyzing || !game.isGameOver) return;
-    const history = gameRef.current.history;
-    if (history.length === 0) return;
-
-    analysisCancelledRef.current = false;
-    setIsAnalyzing(true);
-    setAnalysisProgress(0);
-
-    const fens = [INITIAL_FEN, ...history.map((m) => m.fen)];
-    const evals: EvalScore[] = [];
-    const bestMoves: string[] = [];
-    const depth = 14;
-
-    let lastProgress = 0;
-    for (let i = 0; i < fens.length; i++) {
-      if (analysisCancelledRef.current) return;
-      const result = await engineRef.current.analyzePosition(fens[i], depth);
-      if (analysisCancelledRef.current) return;
-      evals.push(result.evaluation);
-      bestMoves.push(result.bestMove);
-      const pct = Math.round(((i + 1) / fens.length) * 100);
-      if (pct !== lastProgress) {
-        lastProgress = pct;
-        setAnalysisProgress(pct);
-      }
-    }
-
-    setClassifications(classifyMoves(evals));
-    setAnalysisEvals(evals);
-    setAnalysisBestMoves(bestMoves);
-    setPostGameStats(computePostGameStats(evals));
-    setIsAnalyzing(false);
-  }, [isAnalyzing, game.isGameOver]);
-
-  // Sync game state to store for persistence
   useEffect(() => {
     if (!session) return;
     syncPosition({
@@ -294,7 +144,6 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     });
   }, [game.fen, game.status, session, syncPosition, game.history, game.result, game.turn, game.isCheck]);
 
-  // Sync clock to store only on move (activeColor change) or game-over (flagged), not every tick
   useEffect(() => {
     if (!session) return;
     syncClock({
@@ -304,6 +153,8 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
       flaggedColor: clock.flaggedColor,
     });
   }, [clock.activeColor, clock.flaggedColor, session, syncClock]);
+
+  // ── AI engine interaction ──
 
   const requestEngineMove = useCallback(
     (fen: string) => {
@@ -336,11 +187,13 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     requestEngineMove(game.fen);
   }, [game.fen, game.turn, game.isGameOver, session, aiThinking, engine.engineStatus, requestEngineMove]);
 
+  // ── Game lifecycle ──
+
   const handleStartGame = useCallback(
     (newSession: GameSession) => {
       resetGameStore();
       setSession(newSession);
-      analysisCancelledRef.current = true;
+      cancelAnalysis();
       gameRef.current.reset();
       clockRef.current.reset(newSession.timeControl);
       setPremove(null);
@@ -348,22 +201,14 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
       setLastMove(null);
       setShowNewGameDialog(false);
       setAiThinking(false);
-      setEloResult(null);
-      setGameSubmitError(null);
-      setDrawOfferStatus(null);
+      resetSubmission();
+      resetDrawOffer();
+      resetAnalysis();
       setViewingMoveIndex(null);
-      setIsAnalyzing(false);
-      setAnalysisProgress(0);
-      setClassifications(new Map());
-      setPostGameStats(null);
-      setAnalysisEvals([]);
-      setAnalysisBestMoves([]);
-      gameSubmittedRef.current = false;
-      gameStartTimeRef.current = Date.now();
       clockRestoredRef.current = false;
       clockRef.current.start("w");
     },
-    [resetGameStore, setSession, setPremove, setBestMoveArrow, setLastMove],
+    [resetGameStore, setSession, setPremove, setBestMoveArrow, setLastMove, cancelAnalysis, resetSubmission, resetDrawOffer, resetAnalysis, setViewingMoveIndex],
   );
 
   const handlePlayerMove = useCallback(
@@ -391,7 +236,7 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     }
   }, [clock.flaggedColor, game.isGameOver, game.setFlagged]);
 
-  // Low-time tick sound (every second below 10s) — reads from ref to avoid re-renders
+  // Low-time tick sound
   const lastTickSecondRef = useRef(-1);
   useEffect(() => {
     if (game.isGameOver || !session) return;
@@ -417,97 +262,7 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     return () => clearInterval(interval);
   }, [clock.activeColor, playerColor, game.isGameOver, session, clock.whiteMsRef, clock.blackMsRef]);
 
-  // Stable ref for profile refresh so game-over effect doesn't go stale
-  const authRefreshProfileRef = useRef(authRefreshProfile);
-  authRefreshProfileRef.current = authRefreshProfile;
-  const playSfxRef = useRef(playSfx);
-  playSfxRef.current = playSfx;
-
-  // Game over: pause clock, play sound, submit game to API
-  useEffect(() => {
-    if (!game.isGameOver) return;
-    clockRef.current.pause();
-    engineRef.current.stopThinking();
-    setAiThinking(false);
-
-    if (game.status === "checkmate") {
-      playSfxRef.current("checkmate");
-    } else {
-      playSfxRef.current("gameEnd");
-    }
-
-    if (gameSubmittedRef.current) return;
-    const sess = sessionRef.current;
-    const user = useAuthStore.getState().user;
-    if (!sess || !user) return;
-
-    gameSubmittedRef.current = true;
-
-    let playerResult: string;
-    const r = game.result;
-    if (r === "1/2-1/2") {
-      playerResult = "draw";
-    } else if (
-      (sess.playerColor === "w" && r === "1-0") ||
-      (sess.playerColor === "b" && r === "0-1")
-    ) {
-      playerResult = "win";
-    } else {
-      playerResult = "loss";
-    }
-
-    const durationSeconds = Math.round((Date.now() - gameStartTimeRef.current) / 1000);
-    const pgn = gameRef.current.pgn() + " " + game.result;
-
-    const timeControl = sess.timeControl.category;
-
-    gameApi.submit({
-      aiLevel: sess.engineLevel.level,
-      timeControl,
-      isRated: true,
-      result: playerResult,
-      termination: statusToTermination(game.status),
-      playerColor: sess.playerColor === "w" ? "white" : "black",
-      pgn,
-      accuracyPlayer: 0,
-      durationSeconds,
-    }).then(({ data }) => {
-      setEloResult({ change: data.eloChange, after: data.eloAfter });
-      setGameSubmitError(null);
-
-      // Optimistically update the displayed rating immediately
-      const currentProfile = useAuthStore.getState().playerProfile;
-      if (currentProfile) {
-        const updatedProfile = {
-          ...currentProfile,
-          title: data.newTitle ?? currentProfile.title,
-          eloBullet: timeControl === "bullet" ? data.eloAfter : currentProfile.eloBullet,
-          eloBlitz: timeControl === "blitz" ? data.eloAfter : currentProfile.eloBlitz,
-          eloRapid: timeControl === "rapid" ? data.eloAfter : currentProfile.eloRapid,
-          stats: {
-            ...currentProfile.stats,
-            totalGames: currentProfile.stats.totalGames + 1,
-            wins: currentProfile.stats.wins + (playerResult === "win" ? 1 : 0),
-            losses: currentProfile.stats.losses + (playerResult === "loss" ? 1 : 0),
-            draws: currentProfile.stats.draws + (playerResult === "draw" ? 1 : 0),
-            winRate: (() => {
-              const newTotal = currentProfile.stats.totalGames + 1;
-              const newWins = currentProfile.stats.wins + (playerResult === "win" ? 1 : 0);
-              return newTotal > 0 ? (newWins / newTotal) * 100 : 0;
-            })(),
-          },
-        };
-        useAuthStore.setState({ playerProfile: updatedProfile });
-      }
-
-      // Also refresh from API for authoritative data
-      authRefreshProfileRef.current();
-    }).catch((err) => {
-      console.error("Failed to submit game:", err?.response?.data ?? err);
-      setGameSubmitError("Failed to save game result. Your rating was not updated.");
-      gameSubmittedRef.current = false;
-    });
-  }, [game.isGameOver, game.result, game.status]);
+  // ── Game controls ──
 
   const handleResign = useCallback(() => {
     if (!sessionRef.current) return;
@@ -518,10 +273,8 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     if (!sessionRef.current || gameRef.current.isGameOver) return;
     const history = gameRef.current.history;
     if (history.length === 0) return;
-    // Determine if the last move was by the player or AI
     const lastMoveIsWhite = history.length % 2 === 1;
     const lastMoveByPlayer = (sessionRef.current.playerColor === "w") === lastMoveIsWhite;
-    // If last move was by player, undo 1; if by AI, undo 2 (AI + player's preceding move)
     const count = lastMoveByPlayer ? 1 : 2;
     gameRef.current.undo(count);
     setLastMove(null);
@@ -529,30 +282,6 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     setAiThinking(false);
     engineRef.current.stopThinking();
   }, [setLastMove, setBestMoveArrow]);
-
-  const handleOfferDraw = useCallback(() => {
-    if (!sessionRef.current || gameRef.current.isGameOver) return;
-    if (drawOfferStatus === "offered") return;
-
-    setDrawOfferStatus("offered");
-
-    const evalIsRoughlyEqual = (() => {
-      const ev = engineRef.current.evaluation;
-      if (!ev) return true; // No eval available — give benefit of the doubt
-      if (ev.type === "mate") return false; // Mate in sight — AI declines
-      return Math.abs(ev.value) <= 150;
-    })();
-
-    drawTimerRef.current = setTimeout(() => {
-      if (evalIsRoughlyEqual) {
-        gameRef.current.agreeDraw();
-        setDrawOfferStatus("accepted");
-      } else {
-        setDrawOfferStatus("declined");
-      }
-      drawClearTimerRef.current = setTimeout(() => setDrawOfferStatus(null), 2000);
-    }, 1000);
-  }, [drawOfferStatus]);
 
   const handleToggleHint = useCallback(() => {
     if (engine.evaluation && engine.bestMove) {
@@ -564,11 +293,7 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
   }, [engine.evaluation, engine.bestMove, setBestMoveArrow]);
 
   useEffect(() => {
-    return () => {
-      clearTimeout(hintTimerRef.current);
-      clearTimeout(drawTimerRef.current);
-      clearTimeout(drawClearTimerRef.current);
-    };
+    return () => { clearTimeout(hintTimerRef.current); };
   }, []);
 
   const handlePlayAgain = useCallback(() => {
@@ -579,6 +304,8 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
   const handleNewGame = useCallback(() => {
     setShowNewGameDialog(true);
   }, []);
+
+  // ── Derived values ──
 
   const pgnString = useMemo(
     () => (game.isGameOver ? game.pgn() : ""),
@@ -599,33 +326,10 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
     return bestMoveArrow;
   }, [viewingMoveIndex, analysisBestMoves, bestMoveArrow]);
 
-  // Derive annotation data for the currently viewed move
-  const viewedClassification = viewingMoveIndex != null
-    ? classifications.get(viewingMoveIndex)
-    : undefined;
-
-  const viewedAnnotation = useMemo(() => {
-    if (viewingMoveIndex == null || !viewedClassification) return null;
-    if (viewedClassification === "best" || viewedClassification === "good" || viewedClassification === "great" || viewedClassification === "brilliant") return null;
-    const move = game.history[viewingMoveIndex];
-    if (!move) return null;
-    const evalBefore = analysisEvals[viewingMoveIndex];
-    const evalAfter = analysisEvals[viewingMoveIndex + 1];
-    const bestMoveUci = analysisBestMoves[viewingMoveIndex];
-    if (!evalBefore || !evalAfter || !bestMoveUci) return null;
-    const fenBefore = viewingMoveIndex === 0
-      ? INITIAL_FEN
-      : game.history[viewingMoveIndex - 1].fen;
-    return {
-      moveIndex: viewingMoveIndex,
-      classification: viewedClassification,
-      playedMoveSan: move.san,
-      bestMoveUci,
-      fenBefore,
-      evalBefore,
-      evalAfter,
-    };
-  }, [viewingMoveIndex, viewedClassification, game.history, analysisEvals, analysisBestMoves]);
+  const viewedAnnotation = useMemo(
+    () => buildViewedAnnotation(viewingMoveIndex, classifications, game.history, analysisEvals, analysisBestMoves),
+    [viewingMoveIndex, classifications, game.history, analysisEvals, analysisBestMoves],
+  );
 
   const isAnalysisMode = game.isGameOver && postGameStats !== null;
 
@@ -640,68 +344,22 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
 
   return (
     <div className="flex min-h-dvh flex-col items-center bg-background p-4">
-      <div className="mb-4 flex w-full max-w-5xl items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-foreground">♚ ChessArena</h1>
-          {session && (
-            <button
-              onClick={() => setShowNewGameDialog(true)}
-              className="rounded bg-muted px-3 py-1 text-sm font-medium text-muted-foreground hover:bg-border"
-            >
-              New Game
-            </button>
-          )}
-          {onNavigatePuzzles && (
-            <button
-              onClick={onNavigatePuzzles}
-              className="rounded bg-muted px-3 py-1 text-sm font-medium text-muted-foreground hover:bg-border"
-            >
-              Puzzles
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {authUser ? (
-            <>
-              <button
-                onClick={onNavigateProfile}
-                className="text-sm text-foreground font-medium hover:underline"
-              >
-                {authUser.username}
-              </button>
-              {authProfile && (
-                <>
-                  <span className="rounded bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-                    ⚡{authProfile.eloBlitz} 🕐{authProfile.eloRapid} 🔵{authProfile.eloBullet}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {authProfile.stats.totalGames}G {authProfile.stats.wins}W {authProfile.stats.losses}L
-                  </span>
-                </>
-              )}
-              <button
-                onClick={() => { authLogout(); resetGameStore(); setShowNewGameDialog(false); }}
-                className="rounded bg-muted px-3 py-1 text-sm text-muted-foreground hover:bg-border"
-              >
-                Sign Out
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/80"
-            >
-              Sign In
-            </button>
-          )}
-        </div>
-      </div>
+      <GameHeader
+        hasSession={!!session}
+        authUser={authUser}
+        authProfile={authProfile}
+        onNewGame={() => setShowNewGameDialog(true)}
+        onSignIn={() => setShowAuthModal(true)}
+        onSignOut={() => { authLogout(); resetGameStore(); setShowNewGameDialog(false); }}
+        onOpenSettings={() => setShowSettings(true)}
+      />
 
       <AuthModal
-        open={showAuthModal || !authUser}
+        open={showAuthModal}
         onClose={() => setShowAuthModal(false)}
       />
-      <NewGameDialog open={showNewGameDialog && !!authUser} onStart={handleStartGame} />
+      <NewGameDialog open={showNewGameDialog} onStart={handleStartGame} />
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Screen reader announcements */}
       <div
@@ -723,9 +381,9 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
         })()}
       </div>
 
-      {session && authUser && (
-        <div className="flex w-full max-w-5xl items-start justify-center gap-4">
-          <div className="flex w-full max-w-[900px] flex-col gap-2">
+      {session && (
+        <div className="flex w-full max-w-5xl flex-col items-center gap-4 md:flex-row md:items-start md:justify-center">
+          <div className="flex w-full max-w-[900px] flex-col gap-2 md:flex-1">
             <PlayerClockRow
               color={topColor}
               isPlayer={topIsPlayer}
@@ -786,109 +444,44 @@ export function GamePage({ onNavigatePuzzles, onNavigateProfile }: GamePageProps
             />
           </div>
 
-          <div className="hidden w-64 shrink-0 self-start flex-col gap-3 md:flex" style={{ maxHeight: "calc(100vh - 120px)" }}>
-            <ThinkingIndicator isThinking={aiThinking} />
-
-            {openingName && (
-              <div className="rounded-lg bg-muted px-2 py-1.5">
-                <span className="text-xs font-mono text-muted-foreground">{openingName.eco}</span>
-                <span className="ml-1.5 text-xs text-foreground">{openingName.name}</span>
-              </div>
-            )}
-
-            {isAnalysisMode && (
-              <EvalGraph
-                evals={analysisEvals}
-                currentIndex={viewingMoveIndex ?? game.history.length - 1}
-                totalMoves={game.history.length}
-                onSelectMove={handleSelectMove}
-              />
-            )}
-
-            <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-muted p-2">
-              <MoveHistory
-                history={game.history}
-                selectedMoveIndex={viewingMoveIndex}
-                classifications={classifications}
-                onSelectMove={handleSelectMove}
-              />
-              {viewingMoveIndex != null && !isAnalysisMode && (
-                <button
-                  onClick={handleReturnToLive}
-                  className="mt-1 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
-                >
-                  ▶ Live
-                </button>
-              )}
-            </div>
-
-            {viewedAnnotation && (
-              <MoveAnnotation {...viewedAnnotation} />
-            )}
-
-            {isAnalysisMode && (
-              <ReplayControls
-                totalMoves={game.history.length}
-                currentIndex={viewingMoveIndex}
-                onGoToStart={handleGoToStart}
-                onGoBack={handleGoBack}
-                onGoForward={handleGoForward}
-                onGoToEnd={handleReturnToLive}
-              />
-            )}
-
-            <GameControls
-              isGameOver={game.isGameOver}
-              onResign={handleResign}
-              onOfferDraw={handleOfferDraw}
-              onTakeback={handleTakeback}
-              onFlipBoard={flipBoard}
-              onToggleHint={handleToggleHint}
-              canTakeback={!game.isGameOver && game.history.length > 0 && !aiThinking}
-            />
-
-            {drawOfferStatus && (
-              <div className={`rounded-lg px-3 py-2 text-center text-sm font-medium ${
-                drawOfferStatus === "accepted" ? "bg-success/20 text-success" :
-                drawOfferStatus === "declined" ? "bg-destructive/20 text-destructive" :
-                "bg-muted text-muted-foreground animate-pulse"
-              }`}>
-                {drawOfferStatus === "offered" && "Draw offered..."}
-                {drawOfferStatus === "accepted" && "Draw accepted"}
-                {drawOfferStatus === "declined" && "Draw declined"}
-              </div>
-            )}
-
-            {game.isGameOver && (
-              <>
-                <PostGamePanel
-                  status={game.status}
-                  result={game.result}
-                  playerColor={playerColor}
-                  postGameStats={postGameStats}
-                  pgn={pgnString}
-                  onPlayAgain={handlePlayAgain}
-                  onNewGame={handleNewGame}
-                  onAnalyze={handleAnalyzeGame}
-                  isAnalyzing={isAnalyzing}
-                  analysisProgress={analysisProgress}
-                />
-                {eloResult && (
-                  <div className="rounded-lg bg-muted p-3 text-center text-sm">
-                    <span className="text-foreground font-bold">{eloResult.after}</span>
-                    <span className={`ml-2 ${eloResult.change > 0 ? "text-success" : eloResult.change < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                      ({eloResult.change > 0 ? `+${eloResult.change}` : eloResult.change === 0 ? "±0" : eloResult.change})
-                    </span>
-                  </div>
-                )}
-                {gameSubmitError && (
-                  <div className="rounded-lg bg-destructive/10 p-3 text-center text-sm text-destructive">
-                    {gameSubmitError}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          <GameSidebar
+            isGameOver={game.isGameOver}
+            gameStatus={game.status}
+            gameResult={game.result}
+            playerColor={playerColor}
+            history={game.history}
+            aiThinking={aiThinking}
+            canTakeback={!game.isGameOver && game.history.length > 0 && !aiThinking}
+            onResign={handleResign}
+            onOfferDraw={handleOfferDraw}
+            onTakeback={handleTakeback}
+            onFlipBoard={flipBoard}
+            onToggleHint={handleToggleHint}
+            drawOfferStatus={drawOfferStatus}
+            openingName={openingName}
+            viewingMoveIndex={viewingMoveIndex}
+            isAnalysisMode={isAnalysisMode}
+            onSelectMove={handleSelectMove}
+            onReturnToLive={handleReturnToLive}
+            onGoToStart={handleGoToStart}
+            onGoBack={handleGoBack}
+            onGoForward={handleGoForward}
+            classifications={classifications}
+            analysisEvals={analysisEvals}
+            analysisBestMoves={analysisBestMoves}
+            postGameStats={postGameStats}
+            isAnalyzing={isAnalyzing}
+            analysisProgress={analysisProgress}
+            onAnalyze={handleAnalyzeGame}
+            pgn={pgnString}
+            onPlayAgain={handlePlayAgain}
+            onNewGame={handleNewGame}
+            eloResult={eloResult}
+            gameSubmitError={gameSubmitError}
+            isGuest={!authUser}
+            onSignIn={() => setShowAuthModal(true)}
+            viewedAnnotation={viewedAnnotation}
+          />
         </div>
       )}
     </div>

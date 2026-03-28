@@ -2,6 +2,25 @@ import type { MoveClassification } from "@/types/chess";
 import type { EvalScore } from "@/types/engine";
 import type { PostGameStats } from "@/types/game";
 
+const MATE_CP = 10_000;
+
+/** Convert any eval to centipawns. Mate evals become large values (closer mate = more extreme). */
+function evalToCp(ev: EvalScore): number {
+  if (ev.type === "cp") return ev.value;
+  const sign = ev.value > 0 ? 1 : -1;
+  return sign * Math.max(0, MATE_CP - Math.abs(ev.value) * 10);
+}
+
+/** Compute centipawn loss for a single move transition. */
+function moveCpLoss(evalHistory: readonly EvalScore[], moveIndex: number): number {
+  const prevCp = evalToCp(evalHistory[moveIndex - 1]);
+  const currCp = evalToCp(evalHistory[moveIndex]);
+  const isWhiteMove = moveIndex % 2 === 1;
+  return isWhiteMove
+    ? Math.max(0, prevCp - currCp)
+    : Math.max(0, currCp - prevCp);
+}
+
 export function classifyMove(cpLoss: number): MoveClassification {
   if (cpLoss >= 200) return "blunder";
   if (cpLoss >= 100) return "mistake";
@@ -19,16 +38,7 @@ export function classifyMoves(
 ): ReadonlyMap<number, MoveClassification> {
   const result = new Map<number, MoveClassification>();
   for (let i = 1; i < evalHistory.length; i++) {
-    const prev = evalHistory[i - 1];
-    const curr = evalHistory[i];
-    if (prev.type === "mate" || curr.type === "mate") continue;
-
-    const isWhiteMove = i % 2 === 1;
-    const cpLoss = isWhiteMove
-      ? Math.max(0, prev.value - curr.value)
-      : Math.max(0, curr.value - prev.value);
-
-    result.set(i - 1, classifyMove(cpLoss));
+    result.set(i - 1, classifyMove(moveCpLoss(evalHistory, i)));
   }
   return result;
 }
@@ -45,16 +55,8 @@ export function computePostGameStats(
   let inaccuracies = 0;
 
   for (let i = 1; i < evalHistory.length; i++) {
-    const prev = evalHistory[i - 1];
-    const curr = evalHistory[i];
-
-    // Skip mate evaluations for cp loss calculation
-    if (prev.type === "mate" || curr.type === "mate") continue;
-
-    const isWhiteMove = i % 2 === 1; // Odd indices = after white's move (0-indexed)
-    const cpLoss = isWhiteMove
-      ? Math.max(0, prev.value - curr.value) // White wants positive eval
-      : Math.max(0, curr.value - prev.value); // Black wants negative eval
+    const cpLoss = moveCpLoss(evalHistory, i);
+    const isWhiteMove = i % 2 === 1;
 
     const classification = classifyMove(cpLoss);
     if (classification === "blunder") blunders++;

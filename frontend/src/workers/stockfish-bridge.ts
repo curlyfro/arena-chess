@@ -110,7 +110,7 @@ export class StockfishBridge {
       };
     }
 
-    // Parse "info depth 12 score cp 35 ..." or "info depth 12 score mate 3 ..."
+    // Parse "info depth 12 multipv 2 score cp 35 pv e2e4 e7e5 ..."
     if (line.startsWith("info") && line.includes("score")) {
       const depthMatch = line.match(/depth (\d+)/);
       const cpMatch = line.match(/score cp (-?\d+)/);
@@ -136,7 +136,14 @@ export class StockfishBridge {
           return null;
         }
 
-        return { evaluation };
+        const multipvMatch = line.match(/multipv (\d+)/);
+        const pvMatch = line.match(/ pv (\S+)/);
+
+        return {
+          evaluation,
+          multipv: multipvMatch ? parseInt(multipvMatch[1]) : undefined,
+          pvMove: pvMatch ? pvMatch[1] : undefined,
+        };
       }
     }
 

@@ -13,7 +13,16 @@ public sealed record LoginRequest(
 
 public sealed record AuthResponse(
     string AccessToken,
+    string RefreshToken,
     DateTime ExpiresAt
+);
+
+public sealed record RefreshRequest(
+    string RefreshToken
+);
+
+public sealed record RevokeRequest(
+    string RefreshToken
 );
 
 public sealed record UserProfileResponse(

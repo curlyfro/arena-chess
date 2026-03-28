@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   AUTH_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
   authApi,
   playerApi,
   type UserProfile,
@@ -16,17 +17,19 @@ interface AuthState {
 
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, username: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
-/** Shared post-auth: set token, fetch user + profile */
+/** Shared post-auth: set tokens, fetch user + profile */
 async function hydrateSession(
   token: string,
+  refreshToken: string,
   set: (state: Partial<AuthState>) => void,
 ) {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   set({ token, isLoading: false });
 
   const { data: user } = await authApi.me();
@@ -51,7 +54,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { data } = await authApi.login(email, password);
-      await hydrateSession(data.accessToken, set);
+      await hydrateSession(data.accessToken, data.refreshToken, set);
       return true;
     } catch (err: unknown) {
       const message =
@@ -66,7 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { data } = await authApi.register(email, username, password);
-      await hydrateSession(data.accessToken, set);
+      await hydrateSession(data.accessToken, data.refreshToken, set);
       return true;
     } catch (err: unknown) {
       const message =
@@ -78,19 +81,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (refreshToken) {
+      authApi.revoke(refreshToken).catch(() => {});
+    }
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     set({ user: null, playerProfile: null, token: null, error: null });
   },
 
   loadUser: async () => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (!token) return;
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!token || !refreshToken) return;
 
     try {
-      await hydrateSession(token, set);
+      await hydrateSession(token, refreshToken, set);
     } catch (err) {
-      console.warn("Session hydration failed, clearing token:", err);
+      console.warn("Session hydration failed, clearing tokens:", err);
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
       set({ user: null, playerProfile: null, token: null });
     }
   },

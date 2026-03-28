@@ -8,6 +8,6 @@
     "lint-staged": "^16.1.0"
   },
   "lint-staged": {
-    "frontend/src/**/*.{ts,tsx}": "cd frontend && npx eslint --fix --no-warn-ignored"
+    "frontend/src/**/*.{ts,tsx}": "npx -y eslint --fix --no-warn-ignored --config frontend/eslint.config.js"
   }
 }

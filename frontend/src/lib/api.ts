@@ -1,6 +1,7 @@
 import axios from "axios";
 
 export const AUTH_TOKEN_KEY = "chess-arena-token";
+export const REFRESH_TOKEN_KEY = "chess-arena-refresh-token";
 
 const api = axios.create({
   baseURL: "/api",
@@ -15,18 +16,78 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let isRefreshing = false;
+let failedQueue: {
+  resolve: (token: string) => void;
+  reject: (err: unknown) => void;
+}[] = [];
+
+function processQueue(error: unknown, token: string | null) {
+  failedQueue.forEach((p) => {
+    if (token) p.resolve(token);
+    else p.reject(error);
+  });
+  failedQueue = [];
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/auth/refresh")
+    ) {
+      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      if (!storedRefreshToken) {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const { data } = await api.post<AuthResponse>("/auth/refresh", {
+          refreshToken: storedRefreshToken,
+        });
+
+        localStorage.setItem(AUTH_TOKEN_KEY, data.accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+
+        processQueue(null, data.accessToken);
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        window.location.href = "/";
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
+
     return Promise.reject(error);
   },
 );
 
 export interface AuthResponse {
   accessToken: string;
+  refreshToken: string;
   expiresAt: string;
 }
 
@@ -78,6 +139,26 @@ export interface GameSummary {
   playedAt: string;
 }
 
+export interface GameDetail {
+  id: string;
+  playerId: string;
+  playerUsername: string;
+  aiLevel: number;
+  aiElo: number;
+  timeControl: string;
+  isRated: boolean;
+  result: string;
+  termination: string;
+  playerColor: string;
+  eloBefore: number;
+  eloAfter: number;
+  eloChange: number;
+  pgn: string;
+  accuracyPlayer: number;
+  durationSeconds: number;
+  playedAt: string;
+}
+
 export interface RatingHistoryEntry {
   timeControl: string;
   rating: number;
@@ -92,10 +173,18 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>("/auth/login", { email, password }),
 
+  refresh: (refreshToken: string) =>
+    api.post<AuthResponse>("/auth/refresh", { refreshToken }),
+
+  revoke: (refreshToken: string) =>
+    api.post("/auth/revoke", { refreshToken }),
+
   me: () => api.get<UserProfile>("/auth/me"),
 };
 
 export const gameApi = {
+  getDetail: (id: string) => api.get<GameDetail>(`/games/${id}`),
+
   submit: (data: {
     aiLevel: number;
     timeControl: string;
@@ -107,6 +196,9 @@ export const gameApi = {
     accuracyPlayer: number;
     durationSeconds: number;
   }) => api.post<SubmitGameResponse>("/games", data),
+
+  updateAccuracy: (gameId: string, accuracyPlayer: number) =>
+    api.patch(`/games/${gameId}/accuracy`, { accuracyPlayer }),
 };
 
 export const playerApi = {
@@ -115,6 +207,20 @@ export const playerApi = {
     api.get<GameSummary[]>(`/players/${id}/games`, { params: { page, pageSize } }),
   getRatingHistory: (id: string, timeControl = "blitz", limit = 50) =>
     api.get<RatingHistoryEntry[]>(`/players/${id}/rating-history`, { params: { timeControl, limit } }),
+};
+
+export interface LeaderboardEntry {
+  rank: number;
+  playerId: string;
+  username: string;
+  title: string;
+  rating: number;
+  gamesPlayed: number;
+}
+
+export const leaderboardApi = {
+  getTop: (timeControl: string = "blitz") =>
+    api.get<LeaderboardEntry[]>("/leaderboard", { params: { timeControl } }),
 };
 
 export default api;

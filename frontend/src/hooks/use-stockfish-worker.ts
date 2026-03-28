@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Chess } from "chess.js";
 import { StockfishBridge } from "@/workers/stockfish-bridge";
 import type { EngineLevel, EvalScore, EngineStatus } from "@/types/engine";
 
@@ -86,37 +85,34 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     setEngineStatus("thinking");
     pendingLevelRef.current = level;
 
-    // Roll for blunder — pick a random legal move instead of the engine's choice
-    if (level.blunderChance > 0 && Math.random() < level.blunderChance) {
-      try {
-        const chess = new Chess(fen);
-        const moves = chess.moves({ verbose: true });
-        if (moves.length > 0) {
-          const randomMove = moves[Math.floor(Math.random() * moves.length)];
-          const uci = `${randomMove.from}${randomMove.to}${randomMove.promotion ?? ""}`;
-          const delay = level.artificialDelayMs || 500;
-          delayTimerRef.current = setTimeout(() => {
-            setBestMove(uci);
-            setEngineStatus("ready");
-          }, delay);
-          return;
-        }
-      } catch {
-        // Fall through to normal engine move
-      }
-    }
+    // For levels with blunderChance, use MultiPV to pick a weaker (but plausible) move
+    // instead of a completely random legal move
+    const useMultiPV = level.blunderChance > 0 && Math.random() < level.blunderChance;
+    const multiPVCount = useMultiPV ? 4 : 1;
 
+    bridge.send(`setoption name MultiPV value ${multiPVCount}`);
     bridge.send(`setoption name Skill Level value ${level.skillLevel}`);
     bridge.send(`setoption name UCI_LimitStrength value ${level.limitStrength}`);
     if (level.limitStrength) {
       bridge.send(`setoption name UCI_Elo value ${level.elo}`);
     }
     bridge.send(`position fen ${fen}`);
-    bridge.send(`go depth ${level.depth} movetime ${level.moveTimeMs}`);
+
+    // For MultiPV blunders, use a higher depth so the ranking is meaningful
+    const depth = useMultiPV ? Math.max(level.depth, 8) : level.depth;
+    bridge.send(`go depth ${depth} movetime ${level.moveTimeMs}`);
+
+    // Collect MultiPV candidate moves (index 1 = best, 4 = worst of top 4)
+    const pvCandidates = new Map<number, string>();
 
     const unsubscribe = bridge.onMessage((msg) => {
-      if (msg.evaluation) {
+      if (msg.evaluation && (!msg.multipv || msg.multipv === 1)) {
         setEvaluation(msg.evaluation);
+      }
+
+      // Collect PV moves for MultiPV selection
+      if (msg.multipv && msg.pvMove) {
+        pvCandidates.set(msg.multipv, msg.pvMove);
       }
 
       if (msg.bestMove) {
@@ -124,13 +120,32 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
         const currentLevel = pendingLevelRef.current;
         const delay = currentLevel?.artificialDelayMs ?? 0;
 
+        // Pick a weaker move from MultiPV candidates
+        let selectedMove = msg.bestMove;
+        if (useMultiPV && pvCandidates.size > 1) {
+          // Pick from candidates 2-4 (skip the best move)
+          // Lower levels pick from worse moves
+          const candidates = Array.from(pvCandidates.entries())
+            .filter(([idx]) => idx > 1)
+            .sort((a, b) => a[0] - b[0])
+            .map(([, move]) => move);
+
+          if (candidates.length > 0) {
+            // L1-L2: prefer worst candidate, L3-L4: prefer middle candidate
+            const pickIndex = level.level <= 2
+              ? Math.min(candidates.length - 1, Math.floor(Math.random() * candidates.length))
+              : 0;
+            selectedMove = candidates[pickIndex];
+          }
+        }
+
         if (delay > 0) {
           delayTimerRef.current = setTimeout(() => {
-            setBestMove(msg.bestMove!);
+            setBestMove(selectedMove);
             setEngineStatus("ready");
           }, delay);
         } else {
-          setBestMove(msg.bestMove);
+          setBestMove(selectedMove);
           setEngineStatus("ready");
         }
       }
@@ -175,6 +190,7 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
           return;
         }
 
+        bridge.send("setoption name MultiPV value 1");
         bridge.send("setoption name Skill Level value 20");
         bridge.send("setoption name UCI_LimitStrength value false");
         bridge.send(`position fen ${fen}`);

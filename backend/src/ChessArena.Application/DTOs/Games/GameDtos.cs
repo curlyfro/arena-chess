@@ -20,6 +20,8 @@ public sealed record SubmitGameResponse(
     string? NewTitle
 );
 
+public sealed record UpdateAccuracyRequest(float AccuracyPlayer);
+
 public sealed record GameDetailResponse(
     Guid Id,
     Guid PlayerId,

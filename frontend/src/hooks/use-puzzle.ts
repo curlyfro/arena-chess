@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChessGame } from "./use-chess-game";
 import type { Puzzle } from "@/lib/puzzles";
-import { getRandomPuzzle } from "@/lib/puzzles";
+import { getPuzzleNearRating } from "@/lib/puzzles";
+import { usePuzzleStore } from "@/stores/puzzle-store";
 import { parseUciMove } from "@/lib/uci";
 import type { Square, PieceColor, ChessMove } from "@/types/chess";
 
@@ -19,12 +20,27 @@ export interface UsePuzzleReturn {
   readonly tryMove: (move: ChessMove) => boolean;
   readonly nextPuzzle: () => void;
   readonly retryPuzzle: () => void;
+  readonly showSolution: () => void;
+  readonly solutionShown: boolean;
+  readonly currentStreak: number;
+  readonly bestStreak: number;
+  readonly puzzleRating: number;
+  readonly totalSolved: number;
 }
 
 export function usePuzzle(): UsePuzzleReturn {
-  const [puzzle, setPuzzle] = useState<Puzzle>(getRandomPuzzle);
+  const puzzleRating = usePuzzleStore((s) => s.puzzleRating);
+  const currentStreak = usePuzzleStore((s) => s.currentStreak);
+  const bestStreak = usePuzzleStore((s) => s.bestStreak);
+  const totalSolved = usePuzzleStore((s) => s.totalSolved);
+  const recordCorrect = usePuzzleStore((s) => s.recordCorrect);
+  const recordIncorrect = usePuzzleStore((s) => s.recordIncorrect);
+
+  const [puzzle, setPuzzle] = useState<Puzzle>(() => getPuzzleNearRating(puzzleRating));
   const [status, setStatus] = useState<PuzzleStatus>("playing");
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [solutionShown, setSolutionShown] = useState(false);
+  const resultRecordedRef = useRef(false);
 
   const game = useChessGame(puzzle.fen);
   // moveIndex tracks which move in the solution we're expecting next
@@ -75,6 +91,10 @@ export function usePuzzle(): UsePuzzleReturn {
 
         if (moveIdx + 1 >= puzzle.moves.length) {
           setStatus("correct");
+          if (!resultRecordedRef.current) {
+            resultRecordedRef.current = true;
+            recordCorrect(puzzle.rating);
+          }
         }
       }, 400);
     },
@@ -93,6 +113,10 @@ export function usePuzzle(): UsePuzzleReturn {
         if (!result) return false;
         setLastMove({ from: result.from as Square, to: result.to as Square });
         setStatus("incorrect");
+        if (!resultRecordedRef.current) {
+          resultRecordedRef.current = true;
+          recordIncorrect();
+        }
         return true;
       }
 
@@ -103,6 +127,10 @@ export function usePuzzle(): UsePuzzleReturn {
 
       if (moveIndexRef.current >= puzzle.moves.length) {
         setStatus("correct");
+        if (!resultRecordedRef.current) {
+          resultRecordedRef.current = true;
+          recordCorrect(puzzle.rating);
+        }
         return true;
       }
 
@@ -120,19 +148,49 @@ export function usePuzzle(): UsePuzzleReturn {
       game.reset(p.fen);
       moveIndexRef.current = 1;
       setupPlayedRef.current = false;
+      resultRecordedRef.current = false;
       setStatus("playing");
       setLastMove(null);
+      setSolutionShown(false);
     },
     [clearTimer, game.reset],
   );
 
   const nextPuzzle = useCallback(() => {
-    loadPuzzle(getRandomPuzzle(puzzle.id));
+    const rating = usePuzzleStore.getState().puzzleRating;
+    loadPuzzle(getPuzzleNearRating(rating, puzzle.id));
   }, [puzzle.id, loadPuzzle]);
 
   const retryPuzzle = useCallback(() => {
     loadPuzzle(puzzle);
   }, [puzzle, loadPuzzle]);
+
+  const showSolution = useCallback(() => {
+    if (status !== "incorrect" || solutionShown) return;
+    setSolutionShown(true);
+
+    // Reset and replay the correct solution moves with animation
+    game.reset(puzzle.fen);
+    setLastMove(null);
+
+    let step = 0;
+    const playNext = () => {
+      if (step >= puzzle.moves.length) return;
+      const uci = puzzle.moves[step];
+      const move = parseUciMove(uci);
+      const result = game.makeMove(move);
+      if (result) {
+        setLastMove({ from: result.from as Square, to: result.to as Square });
+      }
+      step++;
+      if (step < puzzle.moves.length) {
+        timerRef.current = setTimeout(playNext, 800);
+      }
+    };
+
+    // Start with a small delay
+    timerRef.current = setTimeout(playNext, 400);
+  }, [status, solutionShown, puzzle, game.reset, game.makeMove]);
 
   return {
     puzzle,
@@ -146,5 +204,11 @@ export function usePuzzle(): UsePuzzleReturn {
     tryMove,
     nextPuzzle,
     retryPuzzle,
+    showSolution,
+    solutionShown,
+    currentStreak,
+    bestStreak,
+    puzzleRating,
+    totalSolved,
   };
 }

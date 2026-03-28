@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyMove, computePostGameStats } from "../move-classifier";
+import { classifyMove, classifyMoves, computePostGameStats } from "../move-classifier";
 import type { EvalScore } from "@/types/engine";
 
 describe("classifyMove", () => {
@@ -54,16 +54,37 @@ describe("computePostGameStats", () => {
     expect(stats.inaccuracies).toBe(1); // White's 50cp loss
   });
 
-  it("skips mate evaluations in cp loss calculation", () => {
+  it("classifies moves involving mate evaluations", () => {
     const evals: EvalScore[] = [
-      { type: "cp", value: 0, depth: 14 },
-      { type: "mate", value: 3, depth: 14 }, // Mate eval — skipped
-      { type: "cp", value: 500, depth: 14 },
+      { type: "cp", value: 500, depth: 14 },      // White is +5.0
+      { type: "mate", value: -1, depth: 14 },      // White blundered into mate-in-1 for black
     ];
 
     const stats = computePostGameStats(evals);
-    // Only one transition isn't skipped (mate → cp), but mate is involved so both are skipped
+    expect(stats.blunders).toBe(1);
+  });
+
+  it("classifies finding mate as best move", () => {
+    const evals: EvalScore[] = [
+      { type: "cp", value: 500, depth: 14 },       // Starting: White +5.0
+      { type: "mate", value: 3, depth: 14 },        // White found mate-in-3 (great!)
+    ];
+
+    const stats = computePostGameStats(evals);
     expect(stats.blunders).toBe(0);
+    expect(stats.mistakes).toBe(0);
+    expect(stats.inaccuracies).toBe(0);
+  });
+
+  it("classifies losing forced mate as blunder", () => {
+    // White had mate-in-2, then played a move that lost it
+    const evals: EvalScore[] = [
+      { type: "mate", value: 2, depth: 14 },       // White has mate-in-2
+      { type: "cp", value: 200, depth: 14 },        // After white's move: lost forced mate, only +2.0
+    ];
+
+    const classifications = classifyMoves(evals);
+    expect(classifications.get(0)).toBe("blunder");
   });
 
   it("computes accuracy percentages", () => {

@@ -1,30 +1,17 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { usePuzzle } from "@/hooks/use-puzzle";
-import { useGameStore } from "@/stores/game-store";
-import { BOARD_THEMES } from "@/constants/board-themes";
+import { useBoardPreferences } from "@/hooks/use-board-theme";
 import { ChessBoard } from "@/components/board/ChessBoard";
 import { initAudio } from "@/lib/sounds";
+import { Link } from "react-router";
 
-interface PuzzlePageProps {
-  readonly onBack: () => void;
-}
-
-export function PuzzlePage({ onBack }: PuzzlePageProps) {
+export function PuzzlePage() {
   const puzzle = usePuzzle();
-
-  const boardThemeId = useGameStore((s) => s.boardThemeId);
-  const pieceSet = useGameStore((s) => s.pieceSet);
-  const showCoordinates = useGameStore((s) => s.showCoordinates);
-
-  const theme = useMemo(
-    () => BOARD_THEMES.find((t) => t.id === boardThemeId) ?? BOARD_THEMES[1],
-    [boardThemeId],
-  );
+  const { theme, pieceSet, showCoordinates } = useBoardPreferences();
 
   const isFlipped = puzzle.playerColor === "b";
   const noPremove = useCallback(() => {}, []);
 
-  // Ensure audio context is unlocked for puzzle page too
   const handleFirstInteraction = useCallback(() => {
     initAudio();
   }, []);
@@ -32,17 +19,24 @@ export function PuzzlePage({ onBack }: PuzzlePageProps) {
   return (
     <div className="flex min-h-dvh flex-col items-center bg-background p-4" onPointerDown={handleFirstInteraction}>
       <div className="mb-4 flex w-full max-w-5xl items-center justify-between">
-        <h1 className="text-lg font-bold text-foreground">♚ Puzzles</h1>
-        <button
-          onClick={onBack}
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-foreground">♚ Puzzles</h1>
+          {puzzle.currentStreak > 0 && (
+            <span className="rounded bg-success/20 px-2 py-0.5 text-xs font-bold text-success">
+              {puzzle.currentStreak} streak
+            </span>
+          )}
+        </div>
+        <Link
+          to="/"
           className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-border"
         >
           Back to Game
-        </button>
+        </Link>
       </div>
 
-      <div className="flex w-full max-w-5xl items-start justify-center gap-4">
-        <div className="flex w-full max-w-[900px] flex-col gap-2">
+      <div className="flex w-full max-w-5xl flex-col items-center gap-4 md:flex-row md:items-start md:justify-center">
+        <div className="flex w-full max-w-[900px] flex-col gap-2 md:flex-1">
           <ChessBoard
             board={puzzle.board}
             turn={puzzle.turn}
@@ -62,10 +56,27 @@ export function PuzzlePage({ onBack }: PuzzlePageProps) {
           />
         </div>
 
-        <div className="hidden w-64 shrink-0 flex-col gap-3 md:flex">
+        <div className="flex w-full flex-col gap-3 md:w-64 md:shrink-0">
+          {/* Player puzzle stats */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-muted p-2">
+              <div className="text-lg font-bold text-foreground">{puzzle.puzzleRating}</div>
+              <div className="text-[10px] text-muted-foreground uppercase">Rating</div>
+            </div>
+            <div className="rounded-lg bg-muted p-2">
+              <div className="text-lg font-bold text-success">{puzzle.totalSolved}</div>
+              <div className="text-[10px] text-muted-foreground uppercase">Solved</div>
+            </div>
+            <div className="rounded-lg bg-muted p-2">
+              <div className="text-lg font-bold text-foreground">{puzzle.bestStreak}</div>
+              <div className="text-[10px] text-muted-foreground uppercase">Best</div>
+            </div>
+          </div>
+
+          {/* Puzzle info */}
           <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-sm text-muted-foreground">
-              Rating: <span className="font-bold text-foreground">{puzzle.puzzle.rating}</span>
+              Puzzle: <span className="font-bold text-foreground">{puzzle.puzzle.rating}</span>
             </div>
             {puzzle.puzzle.themes.length > 0 && (
               <div className="mt-1 flex flex-wrap justify-center gap-1">
@@ -81,6 +92,7 @@ export function PuzzlePage({ onBack }: PuzzlePageProps) {
             )}
           </div>
 
+          {/* Status */}
           <div className="rounded-lg bg-muted p-4 text-center">
             <div className="text-sm text-muted-foreground mb-1">
               {puzzle.playerColor === "w" ? "White" : "Black"} to move
@@ -96,22 +108,38 @@ export function PuzzlePage({ onBack }: PuzzlePageProps) {
             )}
           </div>
 
+          {/* Actions */}
           {puzzle.status !== "playing" && (
-            <div className="flex gap-2">
-              {puzzle.status === "incorrect" && (
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                {puzzle.status === "incorrect" && (
+                  <button
+                    onClick={puzzle.retryPuzzle}
+                    className="flex-1 rounded bg-muted px-4 py-2 text-sm font-semibold text-foreground ring-1 ring-border hover:bg-border"
+                  >
+                    Retry
+                  </button>
+                )}
                 <button
-                  onClick={puzzle.retryPuzzle}
-                  className="flex-1 rounded bg-muted px-4 py-2 text-sm font-semibold text-foreground ring-1 ring-border hover:bg-border"
+                  onClick={puzzle.nextPuzzle}
+                  className="flex-1 rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:bg-accent/80"
                 >
-                  Retry
+                  Next Puzzle
+                </button>
+              </div>
+              {puzzle.status === "incorrect" && !puzzle.solutionShown && (
+                <button
+                  onClick={puzzle.showSolution}
+                  className="rounded bg-muted px-4 py-2 text-sm font-medium text-muted-foreground ring-1 ring-border hover:bg-border"
+                >
+                  Show Solution
                 </button>
               )}
-              <button
-                onClick={puzzle.nextPuzzle}
-                className="flex-1 rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:bg-accent/80"
-              >
-                Next Puzzle
-              </button>
+              {puzzle.solutionShown && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Showing solution...
+                </p>
+              )}
             </div>
           )}
         </div>

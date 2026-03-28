@@ -44,6 +44,8 @@ export interface StockfishMessage {
   readonly bestMove?: string;
   readonly ponder?: string;
   readonly evaluation?: EvalScore;
+  readonly multipv?: number;
+  readonly pvMove?: string;
   readonly ready?: boolean;
   readonly uciOk?: boolean;
 }

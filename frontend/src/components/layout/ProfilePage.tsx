@@ -6,29 +6,8 @@ import {
   type GameSummary,
   type RatingHistoryEntry,
 } from "@/lib/api";
-
-interface ProfilePageProps {
-  readonly onBack: () => void;
-}
-
-type TimeControl = "bullet" | "blitz" | "rapid";
-
-const TIME_CONTROL_LABELS: Record<TimeControl, string> = {
-  bullet: "Bullet",
-  blitz: "Blitz",
-  rapid: "Rapid",
-};
-
-const TITLE_COLORS: Record<string, string> = {
-  Grandmaster: "text-red-400",
-  Master: "text-orange-400",
-  CandidateMaster: "text-yellow-400",
-  Expert: "text-purple-400",
-  Advanced: "text-blue-400",
-  Intermediate: "text-teal-400",
-  ClubPlayer: "text-green-400",
-  Beginner: "text-muted-foreground",
-};
+import { Link } from "react-router";
+import { TIME_CONTROL_LABELS, TITLE_COLORS, type TimeControl } from "@/constants/chess-labels";
 
 function RatingCard({ label, rating }: { readonly label: string; readonly rating: number }) {
   return (
@@ -92,7 +71,10 @@ function GameRow({ game }: { readonly game: GameSummary }) {
   const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   return (
-    <div className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-muted/50">
+    <Link
+      to={`/game/${game.id}`}
+      className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-muted/50 cursor-pointer"
+    >
       <div className="flex items-center gap-3">
         <span className={`w-10 font-medium ${resultColor}`}>{game.result}</span>
         <span className="text-muted-foreground">vs AI L{game.aiLevel}</span>
@@ -104,11 +86,11 @@ function GameRow({ game }: { readonly game: GameSummary }) {
         </span>
         <span className="text-xs text-muted-foreground w-14 text-right">{dateStr}</span>
       </div>
-    </div>
+    </Link>
   );
 }
 
-export function ProfilePage({ onBack }: ProfilePageProps) {
+export function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [games, setGames] = useState<GameSummary[]>([]);
@@ -148,9 +130,9 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-background p-4">
         <p className="text-muted-foreground">Sign in to view your profile</p>
-        <button onClick={onBack} className="mt-4 rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
+        <Link to="/" className="mt-4 rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
           Back
-        </button>
+        </Link>
       </div>
     );
   }
@@ -159,12 +141,12 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
     <div className="flex min-h-dvh flex-col items-center bg-background p-4">
       <div className="mb-4 flex w-full max-w-3xl items-center justify-between">
         <h1 className="text-lg font-bold text-foreground">♚ Profile</h1>
-        <button
-          onClick={onBack}
+        <Link
+          to="/"
           className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-border"
         >
           Back to Game
-        </button>
+        </Link>
       </div>
 
       {loading && !displayProfile ? (

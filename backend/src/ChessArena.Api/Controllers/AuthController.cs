@@ -1,14 +1,18 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using ChessArena.Application.DTOs.Auth;
 using ChessArena.Core.Entities;
 using ChessArena.Core.Interfaces;
+using ChessArena.Infrastructure.Data;
+using ChessArena.Infrastructure.Data.Entities;
 using ChessArena.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ChessArena.Api.Controllers;
@@ -20,7 +24,9 @@ public class AuthController(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
     IPlayerRepository playerRepository,
-    IConfiguration configuration) : ControllerBase
+    IUnitOfWork unitOfWork,
+    IConfiguration configuration,
+    AppDbContext dbContext) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(
@@ -37,29 +43,42 @@ public class AuthController(
         if (!result.Succeeded)
             return BadRequest(new { Errors = result.Errors.Select(e => e.Description) });
 
-        // Create the Player entity
-        var player = new Player
+        try
         {
-            Id = Guid.NewGuid(),
-            Username = request.Username,
-            ApplicationUserId = user.Id,
-            CreatedAt = DateTime.UtcNow,
-            LastActiveAt = DateTime.UtcNow,
-        };
+            await unitOfWork.BeginTransactionAsync(ct);
 
-        user.PlayerId = player.Id;
-        await playerRepository.AddAsync(player, ct);
-        await playerRepository.SaveChangesAsync(ct);
-        await userManager.UpdateAsync(user);
+            var player = new Player
+            {
+                Id = Guid.NewGuid(),
+                Username = request.Username,
+                ApplicationUserId = user.Id,
+                CreatedAt = DateTime.UtcNow,
+                LastActiveAt = DateTime.UtcNow,
+            };
 
-        var token = GenerateJwtToken(user, player);
+            user.PlayerId = player.Id;
+            await playerRepository.AddAsync(player, ct);
+            await playerRepository.SaveChangesAsync(ct);
+            await userManager.UpdateAsync(user);
 
-        return Ok(new AuthResponse(token, DateTime.UtcNow.AddMinutes(60)));
+            await unitOfWork.CommitAsync(ct);
+
+            var accessToken = GenerateJwtToken(user, player);
+            var refreshToken = await CreateRefreshTokenAsync(user.Id, ct);
+            return Ok(new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddMinutes(60)));
+        }
+        catch
+        {
+            try { await userManager.DeleteAsync(user); }
+            catch { /* cleanup is best-effort */ }
+            throw;
+        }
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(
-        [FromBody] LoginRequest request)
+        [FromBody] LoginRequest request,
+        CancellationToken ct)
     {
         var user = await userManager.FindByEmailAsync(request.Email);
         if (user == null)
@@ -73,9 +92,57 @@ public class AuthController(
         if (player == null)
             return Unauthorized(new { Error = "Player profile not found" });
 
-        var token = GenerateJwtToken(user, player);
+        var accessToken = GenerateJwtToken(user, player);
+        var refreshToken = await CreateRefreshTokenAsync(user.Id, ct);
 
-        return Ok(new AuthResponse(token, DateTime.UtcNow.AddMinutes(60)));
+        return Ok(new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddMinutes(60)));
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh(
+        [FromBody] RefreshRequest request,
+        CancellationToken ct)
+    {
+        var tokenHash = HashToken(request.RefreshToken);
+        var storedToken = await dbContext.RefreshTokens
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
+
+        if (storedToken == null || !storedToken.IsActive)
+            return Unauthorized(new { Error = "Invalid or expired refresh token" });
+
+        // Revoke the used token (rotation)
+        storedToken.RevokedAt = DateTime.UtcNow;
+
+        var user = await userManager.FindByIdAsync(storedToken.UserId);
+        if (user == null)
+            return Unauthorized(new { Error = "User not found" });
+
+        var player = await playerRepository.GetByApplicationUserIdAsync(user.Id);
+        if (player == null)
+            return Unauthorized(new { Error = "Player profile not found" });
+
+        var accessToken = GenerateJwtToken(user, player);
+        var refreshToken = await CreateRefreshTokenAsync(user.Id, ct);
+
+        return Ok(new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddMinutes(60)));
+    }
+
+    [HttpPost("revoke")]
+    public async Task<IActionResult> Revoke(
+        [FromBody] RevokeRequest request,
+        CancellationToken ct)
+    {
+        var tokenHash = HashToken(request.RefreshToken);
+        var storedToken = await dbContext.RefreshTokens
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
+
+        if (storedToken is { IsActive: true })
+        {
+            storedToken.RevokedAt = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(ct);
+        }
+
+        return NoContent();
     }
 
     [HttpGet("me")]
@@ -126,5 +193,31 @@ public class AuthController(
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private async Task<string> CreateRefreshTokenAsync(string userId, CancellationToken ct)
+    {
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var tokenHash = HashToken(rawToken);
+
+        var refreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TokenHash = tokenHash,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        dbContext.RefreshTokens.Add(refreshToken);
+        await dbContext.SaveChangesAsync(ct);
+
+        return rawToken;
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(bytes);
     }
 }

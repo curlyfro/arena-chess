@@ -22,6 +22,7 @@ export function NewGameDialog({ open, onStart }: NewGameDialogProps) {
   const [colorChoice, setColorChoice] = useState<"w" | "b" | "random">(
     "random",
   );
+  const [isRated, setIsRated] = useState(true);
 
   const handleStart = () => {
     initAudio(); // Unlock AudioContext on user gesture
@@ -36,7 +37,7 @@ export function NewGameDialog({ open, onStart }: NewGameDialogProps) {
       playerColor,
       engineLevel: selectedLevel,
       timeControl: selectedTimeControl,
-      isRated: false, // Phase 1: no rated games
+      isRated,
     });
   };
 
@@ -94,6 +95,32 @@ export function NewGameDialog({ open, onStart }: NewGameDialogProps) {
                   <div className="text-xs capitalize opacity-70">
                     {tc.category}
                   </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Rated */}
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
+              Mode
+            </label>
+            <div className="flex gap-2">
+              {([
+                { value: true, label: "Rated", desc: "Affects Elo" },
+                { value: false, label: "Casual", desc: "No rating change" },
+              ] as const).map((opt) => (
+                <button
+                  key={String(opt.value)}
+                  onClick={() => setIsRated(opt.value)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${
+                    isRated === opt.value
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-muted text-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  <div>{opt.label}</div>
+                  <div className="text-xs opacity-70">{opt.desc}</div>
                 </button>
               ))}
             </div>
