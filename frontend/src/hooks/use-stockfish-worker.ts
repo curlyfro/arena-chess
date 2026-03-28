@@ -31,13 +31,6 @@ function detectHashSize(): number {
   return 32;
 }
 
-function detectThreads(): number {
-  if (typeof navigator !== "undefined" && navigator.hardwareConcurrency) {
-    return Math.min(navigator.hardwareConcurrency, 4);
-  }
-  return 1;
-}
-
 export function useStockfishWorker(): UseStockfishWorkerReturn {
   const bridgeRef = useRef<StockfishBridge | null>(null);
   const [engineStatus, setEngineStatus] = useState<EngineStatus>("unloaded");
@@ -56,12 +49,7 @@ export function useStockfishWorker(): UseStockfishWorkerReturn {
     bridge
       .init()
       .then(() => {
-        // Configure engine
         bridge.send(`setoption name Hash value ${detectHashSize()}`);
-        const threads = detectThreads();
-        if (threads > 1) {
-          bridge.send(`setoption name Threads value ${threads}`);
-        }
         setEngineStatus("ready");
       })
       .catch((err) => {

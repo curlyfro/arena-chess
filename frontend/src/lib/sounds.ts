@@ -164,10 +164,10 @@ const proceduralSounds: Record<SoundType, () => void> = {
 
 // ── Public API ──
 
-export function playSound(type: SoundType): void {
+export function playSound(type: SoundType, volume = 0.5): void {
   try {
     // Try sample first, fall back to procedural
-    if (!playSample(type)) {
+    if (!playSample(type, volume)) {
       proceduralSounds[type]();
     }
   } catch {

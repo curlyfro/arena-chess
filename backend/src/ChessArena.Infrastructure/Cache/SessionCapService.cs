@@ -5,38 +5,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChessArena.Infrastructure.Cache;
 
+/// <summary>
+/// Enforces a rolling 24-hour cap on ELO gains by querying recent game results.
+/// </summary>
 public sealed class SessionCapService(AppDbContext db) : ISessionCapService
 {
     public async Task<bool> CheckAndIncrementAsync(
         Guid playerId, int delta, CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-
-        // Ensure row exists (atomic upsert, no TOCTOU race)
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-            INSERT INTO "EloSessionCaps" ("Id", "PlayerId", "Date", "TotalDelta")
-            VALUES ({Guid.NewGuid()}, {playerId}, {today}, 0)
-            ON CONFLICT ("PlayerId", "Date") DO NOTHING
-            """, ct);
-
-        // Atomic conditional increment
-        int rowsAffected = await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-            UPDATE "EloSessionCaps"
-            SET "TotalDelta" = "TotalDelta" + {delta}
-            WHERE "PlayerId" = {playerId} AND "Date" = {today}
-              AND "TotalDelta" + {delta} <= {RatingConstants.SessionCapMax}
-            """, ct);
-
-        return rowsAffected > 0;
+        // Note: "Increment" is now implicit — the Game record's EloChange column
+        // serves as the increment when it's inserted by GameResultService.
+        var currentTotal = await GetCurrentTotalAsync(playerId, ct);
+        return currentTotal + delta <= RatingConstants.SessionCapMax;
     }
 
     public async Task<int> GetCurrentTotalAsync(Guid playerId, CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var entry = await db.EloSessionCaps
-            .FirstOrDefaultAsync(e => e.PlayerId == playerId && e.Date == today, ct);
-        return entry?.TotalDelta ?? 0;
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        return await db.Games
+            .Where(g => g.PlayerId == playerId && g.PlayedAt >= cutoff && g.EloChange > 0)
+            .SumAsync(g => g.EloChange, ct);
     }
 }

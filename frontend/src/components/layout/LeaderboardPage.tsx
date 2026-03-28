@@ -9,13 +9,18 @@ export function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [selectedTc, setSelectedTc] = useState<TimeControl>("blitz");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     leaderboardApi
       .getTop(selectedTc)
       .then((res) => setEntries(res.data))
-      .catch(() => setEntries([]))
+      .catch(() => {
+        setEntries([]);
+        setError("Failed to load leaderboard");
+      })
       .finally(() => setLoading(false));
   }, [selectedTc]);
 
@@ -49,9 +54,19 @@ export function LeaderboardPage() {
           ))}
         </div>
 
+        {error && (
+          <div className="rounded-lg bg-destructive/10 p-3 text-center text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         {/* Table */}
         {loading ? (
-          <div className="text-muted-foreground animate-pulse text-center py-8">Loading...</div>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
         ) : entries.length === 0 ? (
           <div className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
             No players found for {TIME_CONTROL_LABELS[selectedTc]}

@@ -14,6 +14,7 @@ import { MoveHistory } from "@/components/game/MoveHistory";
 import { EvalGraph } from "@/components/game/EvalGraph";
 import { ReplayControls } from "@/components/game/ReplayControls";
 import { MoveAnnotation } from "@/components/game/MoveAnnotation";
+import { PgnImportDialog } from "@/components/game/PgnImportDialog";
 import type { AnnotatedMove, BoardPiece, MoveClassification, PieceColor } from "@/types/chess";
 import type { EvalScore } from "@/types/engine";
 
@@ -27,6 +28,7 @@ export function ReviewPage() {
   const [gameDetail, setGameDetail] = useState<GameDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const { theme, pieceSet, showCoordinates } = useBoardPreferences();
 
@@ -40,6 +42,30 @@ export function ReviewPage() {
       .catch(() => setError("Failed to load game"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleImportPgn = useCallback((pgn: string) => {
+    setGameDetail({
+      id: "imported",
+      playerId: "",
+      playerUsername: "You",
+      aiLevel: 0,
+      aiElo: 0,
+      timeControl: "",
+      isRated: false,
+      result: "",
+      termination: "",
+      playerColor: "White",
+      eloBefore: 0,
+      eloAfter: 0,
+      eloChange: 0,
+      pgn,
+      accuracyPlayer: 0,
+      durationSeconds: 0,
+      playedAt: new Date().toISOString(),
+    });
+    setLoading(false);
+    setError(null);
+  }, []);
 
   // Parse PGN into annotated moves
   const { history, playerColor } = useMemo(() => {
@@ -169,10 +195,13 @@ export function ReviewPage() {
     [viewingMoveIndex, classifications, history, analysisEvals, analysisBestMoves],
   );
 
-  if (loading) {
+  if (loading && id) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background">
-        <div className="text-muted-foreground animate-pulse">Loading game...</div>
+        <div className="w-full max-w-[500px] space-y-3 p-4">
+          <div className="h-8 animate-pulse rounded bg-muted" />
+          <div className="aspect-square animate-pulse rounded-lg bg-muted" />
+        </div>
       </div>
     );
   }
@@ -181,9 +210,22 @@ export function ReviewPage() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background">
         <p className="text-destructive">{error ?? "Game not found"}</p>
-        <Link to="/profile" className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
-          Back to Profile
-        </Link>
+        <div className="flex gap-2">
+          <Link to="/profile" className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
+            Back to Profile
+          </Link>
+          <button
+            onClick={() => setShowImportDialog(true)}
+            className="rounded bg-muted px-4 py-2 text-sm font-medium text-foreground ring-1 ring-border hover:bg-border"
+          >
+            Load PGN
+          </button>
+        </div>
+        <PgnImportDialog
+          open={showImportDialog}
+          onClose={() => setShowImportDialog(false)}
+          onImport={handleImportPgn}
+        />
       </div>
     );
   }
@@ -204,6 +246,12 @@ export function ReviewPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportDialog(true)}
+            className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-border"
+          >
+            Load PGN
+          </button>
           <Link
             to="/profile"
             className="rounded bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-border"
@@ -309,6 +357,12 @@ export function ReviewPage() {
           />
         </div>
       </div>
+
+      <PgnImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleImportPgn}
+      />
     </div>
   );
 }

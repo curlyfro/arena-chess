@@ -9,18 +9,22 @@ import { useHistoryNavigation } from "@/hooks/use-history-navigation";
 import { useBoardPreferences } from "@/hooks/use-board-theme";
 import { useGameStore } from "@/stores/game-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
+import { ENGINE_LEVELS } from "@/constants/engine-levels";
+import { TIME_CONTROLS, DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import { ChessBoard } from "@/components/board/ChessBoard";
 import { PlayerClockRow } from "@/components/game/PlayerClockRow";
 import { EvalBar } from "@/components/game/EvalBar";
 import { GameHeader } from "@/components/game/GameHeader";
 import { GameSidebar } from "@/components/game/GameSidebar";
+import { Dashboard } from "./Dashboard";
 import { NewGameDialog } from "./NewGameDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { AuthModal } from "./AuthModal";
 import { lookupOpening } from "@/lib/openings";
 import { buildViewedAnnotation } from "@/lib/annotation";
 import { useSound } from "@/hooks/use-sound";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useAchievementChecker } from "@/hooks/use-achievement-checker";
 import { parseUciMove } from "@/lib/uci";
 import type { PieceColor, ChessMove } from "@/types/chess";
 import type { GameSession } from "@/types/game";
@@ -47,7 +51,7 @@ export function GamePage() {
 
   const storedResult = useGameStore((s) => s.result);
   const hasResumableGame = session && storedStatus !== "idle";
-  const [showNewGameDialog, setShowNewGameDialog] = useState(!session || !hasResumableGame);
+  const [showNewGameDialog, setShowNewGameDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
@@ -305,6 +309,29 @@ export function GamePage() {
     setShowNewGameDialog(true);
   }, []);
 
+  const handleQuickPlay = useCallback(() => {
+    const lastSettings = useGameStore.getState().lastGameSettings;
+    if (!lastSettings) {
+      setShowNewGameDialog(true);
+      return;
+    }
+    const level = ENGINE_LEVELS[lastSettings.levelIndex] ?? ENGINE_LEVELS[4];
+    const tc = TIME_CONTROLS.find((t) => t.id === lastSettings.timeControlId) ?? DEFAULT_TIME_CONTROL;
+    const playerColor: PieceColor =
+      lastSettings.colorChoice === "random"
+        ? Math.random() < 0.5 ? "w" : "b"
+        : lastSettings.colorChoice;
+    handleStartGame({ playerColor, engineLevel: level, timeControl: tc, isRated: lastSettings.isRated });
+  }, [handleStartGame]);
+
+  const handleNextLevel = useCallback(() => {
+    const sess = sessionRef.current;
+    if (!sess) return;
+    const nextIndex = ENGINE_LEVELS.findIndex((l) => l.level === sess.engineLevel.level) + 1;
+    if (nextIndex >= ENGINE_LEVELS.length) return;
+    handleStartGame({ ...sess, engineLevel: ENGINE_LEVELS[nextIndex] });
+  }, [handleStartGame]);
+
   // ── Derived values ──
 
   const pgnString = useMemo(
@@ -331,6 +358,36 @@ export function GamePage() {
     [viewingMoveIndex, classifications, game.history, analysisEvals, analysisBestMoves],
   );
 
+  const { checkGameAchievements } = useAchievementChecker();
+
+  // Check achievements when game ends and elo result comes back
+  const achievementCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!game.isGameOver || achievementCheckedRef.current) return;
+    if (!session) return;
+    achievementCheckedRef.current = true;
+    checkGameAchievements({
+      result: game.result,
+      playerColor: session.playerColor,
+      aiLevel: session.engineLevel.level,
+      termination: game.status,
+      moveCount: game.history.length,
+      eloAfter: eloResult?.after ?? null,
+    });
+  }, [game.isGameOver, game.result, game.status, game.history.length, session, eloResult, checkGameAchievements]);
+
+  // Reset achievement check flag on new game
+  useEffect(() => {
+    if (!game.isGameOver) {
+      achievementCheckedRef.current = false;
+    }
+  }, [game.isGameOver]);
+
+  useKeyboardShortcuts({
+    onHint: handleToggleHint,
+    isGameActive: !!session && !game.isGameOver,
+  });
+
   const isAnalysisMode = game.isGameOver && postGameStats !== null;
 
   const topColor: PieceColor = isFlipped ? "w" : "b";
@@ -342,47 +399,60 @@ export function GamePage() {
     ? `AI L${session.engineLevel.level}`
     : "AI";
 
+  const showDashboard = !session || !hasResumableGame;
+
   return (
     <div className="flex min-h-dvh flex-col items-center bg-background p-4">
-      <GameHeader
-        hasSession={!!session}
-        authUser={authUser}
-        authProfile={authProfile}
-        onNewGame={() => setShowNewGameDialog(true)}
-        onSignIn={() => setShowAuthModal(true)}
-        onSignOut={() => { authLogout(); resetGameStore(); setShowNewGameDialog(false); }}
-        onOpenSettings={() => setShowSettings(true)}
-      />
-
       <AuthModal
         open={showAuthModal}
         onClose={() => setShowAuthModal(false)}
       />
-      <NewGameDialog open={showNewGameDialog} onStart={handleStartGame} />
+      <NewGameDialog open={showNewGameDialog} onClose={() => setShowNewGameDialog(false)} onStart={handleStartGame} />
       <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
 
-      {/* Screen reader announcements */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      >
-        {game.history.length > 0 && (() => {
-          const last = game.history[game.history.length - 1];
-          const moveNum = Math.ceil(game.history.length / 2);
-          const side = game.history.length % 2 === 1 ? "White" : "Black";
-          const check = game.isCheck ? ", check" : "";
-          if (game.isGameOver) {
-            const resultText = game.status === "checkmate" ? "Checkmate" : game.status.replace("_", " ");
-            return `${side} plays ${last.san}${check}. ${resultText}. ${game.result}`;
-          }
-          return `Move ${moveNum}: ${side} plays ${last.san}${check}`;
-        })()}
-      </div>
+      {showDashboard ? (
+        <Dashboard
+          authUser={authUser}
+          authProfile={authProfile}
+          onQuickPlay={handleQuickPlay}
+          onNewGame={() => setShowNewGameDialog(true)}
+          onSignIn={() => setShowAuthModal(true)}
+          onSignOut={() => { authLogout(); resetGameStore(); }}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      ) : (
+        <>
+          <GameHeader
+            hasSession={!!session}
+            authUser={authUser}
+            authProfile={authProfile}
+            onNewGame={() => setShowNewGameDialog(true)}
+            onSignIn={() => setShowAuthModal(true)}
+            onSignOut={() => { authLogout(); resetGameStore(); }}
+            onOpenSettings={() => setShowSettings(true)}
+          />
 
-      {session && (
-        <div className="flex w-full max-w-5xl flex-col items-center gap-4 md:flex-row md:items-start md:justify-center">
+          {/* Screen reader announcements */}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          >
+            {game.history.length > 0 && (() => {
+              const last = game.history[game.history.length - 1];
+              const moveNum = Math.ceil(game.history.length / 2);
+              const side = game.history.length % 2 === 1 ? "White" : "Black";
+              const check = game.isCheck ? ", check" : "";
+              if (game.isGameOver) {
+                const resultText = game.status === "checkmate" ? "Checkmate" : game.status.replace("_", " ");
+                return `${side} plays ${last.san}${check}. ${resultText}. ${game.result}`;
+              }
+              return `Move ${moveNum}: ${side} plays ${last.san}${check}`;
+            })()}
+          </div>
+
+          <div className="flex w-full max-w-5xl flex-col items-center gap-4 md:flex-row md:items-start md:justify-center">
           <div className="flex w-full max-w-[900px] flex-col gap-2 md:flex-1">
             <PlayerClockRow
               color={topColor}
@@ -481,8 +551,11 @@ export function GamePage() {
             isGuest={!authUser}
             onSignIn={() => setShowAuthModal(true)}
             viewedAnnotation={viewedAnnotation}
+            onNextLevel={handleNextLevel}
+            sessionLevel={session?.engineLevel.level}
           />
         </div>
+        </>
       )}
     </div>
   );

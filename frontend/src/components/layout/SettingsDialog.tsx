@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useGameStore } from "@/stores/game-store";
 import { BOARD_THEMES, PIECE_SETS } from "@/constants/board-themes";
+import { CloseIcon } from "@/components/ui/CloseIcon";
 
 interface SettingsDialogProps {
   readonly open: boolean;
@@ -54,6 +55,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setPieceSet = useGameStore((s) => s.setPieceSet);
   const soundEnabled = useGameStore((s) => s.soundEnabled);
   const setSoundEnabled = useGameStore((s) => s.setSoundEnabled);
+  const soundVolume = useGameStore((s) => s.soundVolume);
+  const setSoundVolume = useGameStore((s) => s.setSoundVolume);
   const showCoordinates = useGameStore((s) => s.showCoordinates);
   const setShowCoordinates = useGameStore((s) => s.setShowCoordinates);
   const showEvalBar = useGameStore((s) => s.showEvalBar);
@@ -73,9 +76,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label="Close"
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 5l10 10M15 5L5 15" />
-              </svg>
+              <CloseIcon />
             </Dialog.Close>
           </div>
 
@@ -138,6 +139,18 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             <SettingRow label="Sound">
               <ToggleSwitch checked={soundEnabled} onChange={setSoundEnabled} />
             </SettingRow>
+            {soundEnabled && (
+              <SettingRow label="Volume">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={soundVolume}
+                  onChange={(e) => setSoundVolume(Number(e.target.value))}
+                  className="w-24 accent-accent"
+                />
+              </SettingRow>
+            )}
             <SettingRow label="Board Coordinates">
               <ToggleSwitch checked={showCoordinates} onChange={setShowCoordinates} />
             </SettingRow>

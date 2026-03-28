@@ -5,9 +5,8 @@ using ChessArena.Core.Interfaces;
 namespace ChessArena.Infrastructure.Validation;
 
 /// <summary>
-/// Phase 1.5: cross-validates PGN result marker against declared result and player color,
-/// enforces minimum move count, and checks for basic algebraic notation.
-/// Phase 2 will add full move-by-move replay validation.
+/// Validates PGN submissions: cross-validates result markers, enforces SAN move format,
+/// and verifies move sequence structure (move numbers, alternating moves).
 /// </summary>
 public sealed partial class PgnValidator : IPgnValidator
 {
@@ -30,15 +29,51 @@ public sealed partial class PgnValidator : IPgnValidator
         if (!ResultMatchesPgn(declaredResult, playerColor, pgnResult))
             return Task.FromResult(false);
 
-        // Require at least one full move (move number "1." must appear)
-        if (!MoveNumberRegex().IsMatch(pgn))
+        // Parse and validate individual SAN moves
+        var moves = ExtractMoves(pgn);
+        if (moves.Count == 0)
             return Task.FromResult(false);
 
-        // Require at least one algebraic notation move
-        if (!AlgebraicMoveRegex().IsMatch(pgn))
+        // Validate each move is well-formed SAN
+        foreach (var move in moves)
+        {
+            if (!SanMoveRegex().IsMatch(move))
+                return Task.FromResult(false);
+        }
+
+        // Validate move numbering is sequential
+        var moveNumbers = MoveNumberExtract().Matches(pgn);
+        if (moveNumbers.Count == 0)
             return Task.FromResult(false);
+
+        int expectedNumber = 1;
+        foreach (Match m in moveNumbers)
+        {
+            if (int.TryParse(m.Groups[1].Value, out int num))
+            {
+                if (num != expectedNumber)
+                    return Task.FromResult(false);
+                expectedNumber++;
+            }
+        }
 
         return Task.FromResult(true);
+    }
+
+    private static List<string> ExtractMoves(string pgn)
+    {
+        // Strip result token
+        var cleaned = pgn.TrimEnd();
+        cleaned = ResultTokenRegex().Replace(cleaned, "").Trim();
+
+        // Strip move numbers (e.g., "1.", "12...")
+        cleaned = MoveNumberStripRegex().Replace(cleaned, " ");
+
+        // Split on whitespace and filter
+        var tokens = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return tokens
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToList();
     }
 
     private static string? ExtractPgnResult(string pgn)
@@ -72,9 +107,20 @@ public sealed partial class PgnValidator : IPgnValidator
         };
     }
 
-    [GeneratedRegex(@"\d+\.")]
-    private static partial Regex MoveNumberRegex();
+    // Matches valid SAN moves: piece moves (Nf3, Bxe5+, Qd1#), pawn moves (e4, exd5, e8=Q),
+    // castling (O-O, O-O-O), with optional check/checkmate suffix
+    [GeneratedRegex(@"^(?:O-O-O|O-O|[KQRBN][a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?|[a-h](?:x[a-h])?[1-8](?:=[QRBN])?)[+#]?$")]
+    private static partial Regex SanMoveRegex();
 
-    [GeneratedRegex(@"\d+\.\s*[a-hKQRBNO]")]
-    private static partial Regex AlgebraicMoveRegex();
+    // Extracts move numbers: "1.", "23."
+    [GeneratedRegex(@"(\d+)\.")]
+    private static partial Regex MoveNumberExtract();
+
+    // Strips move numbers for move extraction
+    [GeneratedRegex(@"\d+\.+\s*")]
+    private static partial Regex MoveNumberStripRegex();
+
+    // Matches PGN result tokens at end of string
+    [GeneratedRegex(@"\s*(?:1-0|0-1|1/2-1/2|\*)\s*$")]
+    private static partial Regex ResultTokenRegex();
 }

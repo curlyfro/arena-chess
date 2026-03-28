@@ -5,14 +5,17 @@ import type { AnnotatedMove } from "@/types/chess";
 
 export function useSound() {
   const soundEnabled = useGameStore((s) => s.soundEnabled);
+  const soundVolume = useGameStore((s) => s.soundVolume);
+
+  const vol = soundVolume / 100;
 
   const playSoundIfEnabled = useCallback(
     (type: Parameters<typeof playSound>[0]) => {
       if (soundEnabled) {
-        playSound(type);
+        playSound(type, vol);
       }
     },
-    [soundEnabled],
+    [soundEnabled, vol],
   );
 
   const playMoveSound = useCallback(
@@ -20,17 +23,16 @@ export function useSound() {
       if (!soundEnabled) return;
 
       if (isCheck) {
-        playSound("check");
+        playSound("check", vol);
       } else if (move.flags.includes("k") || move.flags.includes("q")) {
-        // Kingside or queenside castle
-        playSound("castle");
+        playSound("castle", vol);
       } else if (move.captured) {
-        playSound("capture");
+        playSound("capture", vol);
       } else {
-        playSound("move");
+        playSound("move", vol);
       }
     },
-    [soundEnabled],
+    [soundEnabled, vol],
   );
 
   return { playSound: playSoundIfEnabled, playMoveSound };

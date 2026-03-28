@@ -5,6 +5,7 @@ import { PuzzlePage } from "@/components/layout/PuzzlePage";
 import { ProfilePage } from "@/components/layout/ProfilePage";
 import { ReviewPage } from "@/components/layout/ReviewPage";
 import { LeaderboardPage } from "@/components/layout/LeaderboardPage";
+import { AchievementToast } from "@/components/ui/AchievementToast";
 import { useGameStore } from "@/stores/game-store";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/game/:id" element={<ReviewPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <AchievementToast />
       </ErrorBoundary>
     </BrowserRouter>
   );

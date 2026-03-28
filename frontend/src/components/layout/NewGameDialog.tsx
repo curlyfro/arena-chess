@@ -1,6 +1,8 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { initAudio } from "@/lib/sounds";
+import { useGameStore } from "@/stores/game-store";
+import { CloseIcon } from "@/components/ui/CloseIcon";
 import { ENGINE_LEVELS } from "@/constants/engine-levels";
 import { TIME_CONTROLS, DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import type { PieceColor } from "@/types/chess";
@@ -10,22 +12,40 @@ import type { GameSession } from "@/types/game";
 
 interface NewGameDialogProps {
   readonly open: boolean;
+  readonly onClose: () => void;
   readonly onStart: (session: GameSession) => void;
 }
 
-export function NewGameDialog({ open, onStart }: NewGameDialogProps) {
+export function NewGameDialog({ open, onClose, onStart }: NewGameDialogProps) {
+  const lastSettings = useGameStore((s) => s.lastGameSettings);
+  const setLastGameSettings = useGameStore((s) => s.setLastGameSettings);
+
   const [selectedLevel, setSelectedLevel] = useState<EngineLevel>(
-    ENGINE_LEVELS[4], // Level 5 default
+    lastSettings
+      ? ENGINE_LEVELS[lastSettings.levelIndex] ?? ENGINE_LEVELS[4]
+      : ENGINE_LEVELS[4],
   );
   const [selectedTimeControl, setSelectedTimeControl] =
-    useState<TimeControlPreset>(DEFAULT_TIME_CONTROL);
+    useState<TimeControlPreset>(
+      lastSettings
+        ? TIME_CONTROLS.find((tc) => tc.id === lastSettings.timeControlId) ?? DEFAULT_TIME_CONTROL
+        : DEFAULT_TIME_CONTROL,
+    );
   const [colorChoice, setColorChoice] = useState<"w" | "b" | "random">(
-    "random",
+    lastSettings?.colorChoice ?? "random",
   );
-  const [isRated, setIsRated] = useState(true);
+  const [isRated, setIsRated] = useState(lastSettings?.isRated ?? true);
 
   const handleStart = () => {
     initAudio(); // Unlock AudioContext on user gesture
+
+    setLastGameSettings({
+      levelIndex: ENGINE_LEVELS.indexOf(selectedLevel),
+      timeControlId: selectedTimeControl.id,
+      colorChoice,
+      isRated,
+    });
+
     const playerColor: PieceColor =
       colorChoice === "random"
         ? Math.random() < 0.5
@@ -42,13 +62,21 @@ export function NewGameDialog({ open, onStart }: NewGameDialogProps) {
   };
 
   return (
-    <Dialog.Root open={open}>
+    <Dialog.Root open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60" />
         <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-background p-6 shadow-xl ring-1 ring-border">
-          <Dialog.Title className="mb-4 text-xl font-bold text-foreground">
-            New Game
-          </Dialog.Title>
+          <div className="mb-4 flex items-center justify-between">
+            <Dialog.Title className="text-xl font-bold text-foreground">
+              New Game
+            </Dialog.Title>
+            <Dialog.Close
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Close"
+            >
+              <CloseIcon />
+            </Dialog.Close>
+          </div>
 
           {/* Difficulty */}
           <div className="mb-4">

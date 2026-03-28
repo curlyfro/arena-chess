@@ -84,7 +84,10 @@ public class AuthController(
         if (user == null)
             return Unauthorized(new { Error = "Invalid email or password" });
 
-        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, false);
+        if (await userManager.IsLockedOutAsync(user))
+            return Unauthorized(new { Error = "Account is temporarily locked. Try again later." });
+
+        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, true);
         if (!result.Succeeded)
             return Unauthorized(new { Error = "Invalid email or password" });
 

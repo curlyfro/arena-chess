@@ -61,6 +61,10 @@ interface GameSidebarProps {
   readonly isGuest: boolean;
   readonly onSignIn: () => void;
 
+  // Next level
+  readonly onNextLevel?: () => void;
+  readonly sessionLevel?: number;
+
   // Annotation
   readonly viewedAnnotation: {
     moveIndex: number;
@@ -108,6 +112,8 @@ export function GameSidebar({
   gameSubmitError,
   isGuest,
   onSignIn,
+  onNextLevel,
+  sessionLevel,
   viewedAnnotation,
 }: GameSidebarProps) {
   return (
@@ -194,6 +200,8 @@ export function GameSidebar({
             pgn={pgn}
             onPlayAgain={onPlayAgain}
             onNewGame={onNewGame}
+            onNextLevel={onNextLevel}
+            sessionLevel={sessionLevel}
             onAnalyze={onAnalyze}
             isAnalyzing={isAnalyzing}
             analysisProgress={analysisProgress}

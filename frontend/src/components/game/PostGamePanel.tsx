@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
+import { ENGINE_LEVELS } from "@/constants/engine-levels";
 import type { GameStatus, GameResult, PieceColor } from "@/types/chess";
 import type { PostGameStats } from "@/types/game";
 
@@ -11,6 +12,8 @@ interface PostGamePanelProps {
   readonly pgn: string;
   readonly onPlayAgain: () => void;
   readonly onNewGame: () => void;
+  readonly onNextLevel?: () => void;
+  readonly sessionLevel?: number;
   readonly onAnalyze?: () => void;
   readonly isAnalyzing?: boolean;
   readonly analysisProgress?: number;
@@ -57,6 +60,8 @@ export const PostGamePanel = memo(function PostGamePanel({
   pgn,
   onPlayAgain,
   onNewGame,
+  onNextLevel,
+  sessionLevel,
   onAnalyze,
   isAnalyzing,
   analysisProgress,
@@ -130,8 +135,16 @@ export const PostGamePanel = memo(function PostGamePanel({
           onClick={onPlayAgain}
           className="flex-1 rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:bg-accent/80"
         >
-          Play Again
+          Rematch
         </button>
+        {onNextLevel && sessionLevel != null && sessionLevel < ENGINE_LEVELS.length && (
+          <button
+            onClick={onNextLevel}
+            className="flex-1 rounded bg-accent/70 px-4 py-2 text-sm font-semibold text-accent-foreground hover:bg-accent/60"
+          >
+            Level {sessionLevel + 1} →
+          </button>
+        )}
         <button
           onClick={onNewGame}
           className="flex-1 rounded bg-muted px-4 py-2 text-sm font-semibold text-foreground ring-1 ring-border hover:bg-border"

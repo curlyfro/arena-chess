@@ -17,19 +17,30 @@ import { INITIAL_FEN } from "@/constants/chess";
 
 // ── Preferences (persisted to localStorage) ──
 
+export interface LastGameSettings {
+  readonly levelIndex: number;
+  readonly timeControlId: string;
+  readonly colorChoice: "w" | "b" | "random";
+  readonly isRated: boolean;
+}
+
 interface PreferencesSlice {
   boardThemeId: string;
   pieceSet: PieceSet;
   boardFlipped: boolean;
   soundEnabled: boolean;
+  soundVolume: number;
   showCoordinates: boolean;
   showEvalBar: boolean;
+  lastGameSettings: LastGameSettings | null;
   setBoardThemeId: (id: string) => void;
   setPieceSet: (set: PieceSet) => void;
   flipBoard: () => void;
   setSoundEnabled: (on: boolean) => void;
+  setSoundVolume: (volume: number) => void;
   setShowCoordinates: (on: boolean) => void;
   setShowEvalBar: (on: boolean) => void;
+  setLastGameSettings: (settings: LastGameSettings) => void;
 }
 
 // ── Game state (ephemeral) ──
@@ -126,8 +137,10 @@ export const useGameStore = create<GameStore>()(
       pieceSet: "merida" as PieceSet,
       boardFlipped: false,
       soundEnabled: true,
+      soundVolume: 50,
       showCoordinates: true,
       showEvalBar: true,
+      lastGameSettings: null,
 
       setBoardThemeId: (id) => set({ boardThemeId: id }),
       setPieceSet: (pieceSet) => set({ pieceSet }),
@@ -136,8 +149,10 @@ export const useGameStore = create<GameStore>()(
           state.boardFlipped = !state.boardFlipped;
         }),
       setSoundEnabled: (on) => set({ soundEnabled: on }),
+      setSoundVolume: (volume) => set({ soundVolume: volume }),
       setShowCoordinates: (on) => set({ showCoordinates: on }),
       setShowEvalBar: (on) => set({ showEvalBar: on }),
+      setLastGameSettings: (settings) => set({ lastGameSettings: settings }),
 
       // ── Game state (ephemeral) ──
       ...initialGameState,
@@ -177,11 +192,14 @@ export const useGameStore = create<GameStore>()(
     })),
     {
       name: "chess-arena-state",
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
           state.soundEnabled = true;
+        }
+        if (version < 3) {
+          state.lastGameSettings = null;
         }
         return state as typeof persisted;
       },
@@ -191,8 +209,10 @@ export const useGameStore = create<GameStore>()(
         pieceSet: state.pieceSet,
         boardFlipped: state.boardFlipped,
         soundEnabled: state.soundEnabled,
+        soundVolume: state.soundVolume,
         showCoordinates: state.showCoordinates,
         showEvalBar: state.showEvalBar,
+        lastGameSettings: state.lastGameSettings,
         // Active game (restored on reload)
         session: state.session,
         fen: state.fen,
