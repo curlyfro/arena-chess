@@ -5,7 +5,12 @@
       "Bash(npm run:*)",
       "Bash(cd:*)",
       "Bash(node:*)",
-      "Bash(dotnet ef:*)"
-    ]
+      "Bash(dotnet ef:*)",
+      "Bash(find /d/arena-chess/backend/src -type f -name *.cs)",
+      "Bash(zstd -d /tmp/lichess_puzzles.csv.zst -o /tmp/lichess_puzzles.csv --force)",
+      "Bash(cygpath:*)",
+      "Bash(node -e \":*)"
+    ],
+    "defaultMode": "auto"
   }
 }

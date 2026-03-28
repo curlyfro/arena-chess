@@ -41,12 +41,13 @@ public sealed partial class PgnValidator : IPgnValidator
                 return Task.FromResult(false);
         }
 
-        // Validate move numbering is sequential
-        var moveNumbers = MoveNumberExtract().Matches(pgn);
+        // Validate move numbering is sequential (strip headers first to avoid matching numbers in FEN etc.)
+        var moveSection = HeaderLineRegex().Replace(pgn, "").Trim();
+        var moveNumbers = MoveNumberExtract().Matches(moveSection);
         if (moveNumbers.Count == 0)
             return Task.FromResult(false);
 
-        int expectedNumber = 1;
+        int expectedNumber = int.TryParse(moveNumbers[0].Groups[1].Value, out int first) ? first : 1;
         foreach (Match m in moveNumbers)
         {
             if (int.TryParse(m.Groups[1].Value, out int num))
@@ -62,8 +63,10 @@ public sealed partial class PgnValidator : IPgnValidator
 
     private static List<string> ExtractMoves(string pgn)
     {
+        // Strip PGN headers (lines like [Event "?"], [FEN "..."], etc.)
+        var cleaned = HeaderLineRegex().Replace(pgn, "").Trim();
+
         // Strip result token
-        var cleaned = pgn.TrimEnd();
         cleaned = ResultTokenRegex().Replace(cleaned, "").Trim();
 
         // Strip move numbers (e.g., "1.", "12...")
@@ -123,4 +126,8 @@ public sealed partial class PgnValidator : IPgnValidator
     // Matches PGN result tokens at end of string
     [GeneratedRegex(@"\s*(?:1-0|0-1|1/2-1/2|\*)\s*$")]
     private static partial Regex ResultTokenRegex();
+
+    // Matches PGN header lines: [Key "Value"]
+    [GeneratedRegex(@"\[[^\]]*\]\s*", RegexOptions.Multiline)]
+    private static partial Regex HeaderLineRegex();
 }

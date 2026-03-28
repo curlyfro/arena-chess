@@ -95,9 +95,9 @@ export function NewGameDialog({ open, onClose, onStart }: NewGameDialogProps) {
                   }`}
                 >
                   <div className="font-semibold">
-                    L{level.level} {level.label}
+                    {level.name}
                   </div>
-                  <div className="text-xs opacity-70">~{level.elo} Elo</div>
+                  <div className="text-xs opacity-70">L{level.level} {level.label} ~{level.elo}</div>
                 </button>
               ))}
             </div>

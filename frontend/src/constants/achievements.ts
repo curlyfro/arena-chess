@@ -3,7 +3,7 @@ export interface AchievementDef {
   readonly name: string;
   readonly description: string;
   readonly icon: string;
-  readonly category: "games" | "puzzles" | "rating";
+  readonly category: "games" | "puzzles" | "rating" | "tutorials";
 }
 
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
@@ -34,6 +34,11 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   { id: "elo-1600", name: "Competitor", description: "Reach 1600 rating", icon: "\u2191", category: "rating" },
   { id: "elo-1800", name: "Expert", description: "Reach 1800 rating", icon: "\u2191", category: "rating" },
   { id: "elo-2000", name: "Master", description: "Reach 2000 rating", icon: "\u2191", category: "rating" },
+
+  // Tutorials
+  { id: "tutorial-first", name: "Student", description: "Complete your first tutorial", icon: "\uD83D\uDCD6", category: "tutorials" },
+  { id: "tutorial-basics", name: "Fundamentals", description: "Complete all basic tutorials", icon: "\uD83D\uDCDA", category: "tutorials" },
+  { id: "tutorial-all", name: "Scholar", description: "Complete all tutorials", icon: "\uD83C\uDF93", category: "tutorials" },
 ] as const;
 
 export function getAchievementDef(id: string): AchievementDef | undefined {

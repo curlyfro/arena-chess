@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { useGameStore } from "@/stores/game-store";
 import type { PlayerProfile } from "@/lib/api";
 
 interface GameHeaderProps {
@@ -20,10 +21,15 @@ export function GameHeader({
   onSignOut,
   onOpenSettings,
 }: GameHeaderProps) {
+  const soundEnabled = useGameStore((s) => s.soundEnabled);
+  const setSoundEnabled = useGameStore((s) => s.setSoundEnabled);
+
   return (
     <div className="mb-4 flex w-full max-w-5xl items-center justify-between">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-bold text-foreground">♚ ChessArena</h1>
+        <Link to="/" className="text-lg font-bold text-foreground hover:text-accent transition-colors">
+          &#x265A; ChessArena
+        </Link>
         {hasSession && (
           <button
             onClick={onNewGame}
@@ -32,6 +38,12 @@ export function GameHeader({
             New Game
           </button>
         )}
+        <Link
+          to="/tutorials"
+          className="rounded bg-muted px-3 py-1 text-sm font-medium text-muted-foreground hover:bg-border"
+        >
+          Tutorials
+        </Link>
         <Link
           to="/puzzles"
           className="rounded bg-muted px-3 py-1 text-sm font-medium text-muted-foreground hover:bg-border"
@@ -45,11 +57,19 @@ export function GameHeader({
           Leaderboard
         </Link>
         <button
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="rounded bg-muted px-2 py-1 text-sm text-muted-foreground hover:bg-border"
+          aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+          title={soundEnabled ? "Sound on" : "Sound off"}
+        >
+          {soundEnabled ? "\uD83D\uDD0A" : "\uD83D\uDD07"}
+        </button>
+        <button
           onClick={onOpenSettings}
           className="rounded bg-muted px-2 py-1 text-sm text-muted-foreground hover:bg-border"
           aria-label="Settings"
         >
-          ⚙
+          &#x2699;
         </button>
       </div>
       <div className="flex items-center gap-3">

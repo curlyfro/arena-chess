@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 interface GameShortcutActions {
   readonly onHint: () => void;
   readonly isGameActive: boolean;
+  readonly onToggleShortcutHelp?: () => void;
 }
 
 /**
@@ -23,6 +24,9 @@ export function useKeyboardShortcuts(actions: GameShortcutActions) {
 
       if (e.key === "h" && actionsRef.current.isGameActive) {
         actionsRef.current.onHint();
+      }
+      if (e.key === "?" && actionsRef.current.onToggleShortcutHelp) {
+        actionsRef.current.onToggleShortcutHelp();
       }
     };
 

@@ -11,6 +11,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 1,
     label: "Beginner",
+    name: "Woody",
     skillLevel: 0,
     depth: 1,
     moveTimeMs: 50,
@@ -23,6 +24,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 2,
     label: "Novice",
+    name: "Luna",
     skillLevel: 1,
     depth: 1,
     moveTimeMs: 100,
@@ -35,6 +37,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 3,
     label: "Amateur",
+    name: "Felix",
     skillLevel: 3,
     depth: 2,
     moveTimeMs: 200,
@@ -47,6 +50,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 4,
     label: "Club Player",
+    name: "Nadia",
     skillLevel: 5,
     depth: 4,
     moveTimeMs: 300,
@@ -59,6 +63,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 5,
     label: "Intermediate",
+    name: "Gareth",
     skillLevel: 8,
     depth: 6,
     moveTimeMs: 500,
@@ -71,6 +76,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 6,
     label: "Advanced",
+    name: "Sable",
     skillLevel: 14,
     depth: 10,
     moveTimeMs: 750,
@@ -83,6 +89,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 7,
     label: "Expert",
+    name: "Viktor",
     skillLevel: 17,
     depth: 14,
     moveTimeMs: 1000,
@@ -95,6 +102,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
   {
     level: 8,
     label: "Master",
+    name: "Kassia",
     skillLevel: 20,
     depth: 20,
     moveTimeMs: 2000,
@@ -108,4 +116,8 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
 
 export const AI_ELO_MAP: ReadonlyMap<number, number> = new Map(
   ENGINE_LEVELS.map((l) => [l.level, l.elo]),
+);
+
+export const AI_NAME_MAP: ReadonlyMap<number, string> = new Map(
+  ENGINE_LEVELS.map((l) => [l.level, l.name]),
 );

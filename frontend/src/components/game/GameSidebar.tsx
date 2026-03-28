@@ -1,6 +1,8 @@
+import { Link } from "react-router";
 import { GameControls } from "./GameControls";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { MoveHistory } from "./MoveHistory";
+import { MoveStrip } from "./MoveStrip";
 import { EvalGraph } from "./EvalGraph";
 import { MoveAnnotation } from "./MoveAnnotation";
 import { ReplayControls } from "./ReplayControls";
@@ -65,6 +67,12 @@ interface GameSidebarProps {
   readonly onNextLevel?: () => void;
   readonly sessionLevel?: number;
 
+  // Win streak
+  readonly winStreak?: number;
+
+  // Help
+  readonly onToggleShortcutHelp?: () => void;
+
   // Annotation
   readonly viewedAnnotation: {
     moveIndex: number;
@@ -101,6 +109,7 @@ export function GameSidebar({
   onGoForward,
   classifications,
   analysisEvals,
+  analysisBestMoves,
   postGameStats,
   isAnalyzing,
   analysisProgress,
@@ -114,11 +123,15 @@ export function GameSidebar({
   onSignIn,
   onNextLevel,
   sessionLevel,
+  winStreak,
+  onToggleShortcutHelp,
   viewedAnnotation,
 }: GameSidebarProps) {
   return (
     <div className="flex w-full flex-col gap-3 md:w-64 md:shrink-0 md:self-start md:max-h-[calc(100vh-120px)]">
-      <GameControls
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <GameControls
         isGameOver={isGameOver}
         onResign={onResign}
         onOfferDraw={onOfferDraw}
@@ -127,6 +140,17 @@ export function GameSidebar({
         onToggleHint={onToggleHint}
         canTakeback={canTakeback}
       />
+        </div>
+        {onToggleShortcutHelp && (
+          <button
+            onClick={onToggleShortcutHelp}
+            className="rounded bg-muted px-2 py-1.5 text-sm text-muted-foreground hover:bg-border hover:text-foreground"
+            title="Keyboard shortcuts (?)"
+          >
+            ?
+          </button>
+        )}
+      </div>
 
       {drawOfferStatus && (
         <div className={`rounded-lg px-3 py-2 text-center text-sm font-medium ${
@@ -143,10 +167,15 @@ export function GameSidebar({
       <ThinkingIndicator isThinking={aiThinking} />
 
       {openingName && (
-        <div className="rounded-lg bg-muted px-2 py-1.5">
+        <Link
+          to={`/openings?q=${encodeURIComponent(openingName.name)}`}
+          className="block rounded-lg bg-muted px-2 py-1.5 hover:bg-border transition-colors"
+          title="Explore this opening"
+        >
           <span className="text-xs font-mono text-muted-foreground">{openingName.eco}</span>
           <span className="ml-1.5 text-xs text-foreground">{openingName.name}</span>
-        </div>
+          <span className="ml-1 text-xs text-muted-foreground">→</span>
+        </Link>
       )}
 
       {isAnalysisMode && (
@@ -158,22 +187,34 @@ export function GameSidebar({
         />
       )}
 
-      <div className="min-h-0 max-h-48 flex-1 overflow-auto rounded-lg bg-muted p-2 md:max-h-none">
+      {/* Mobile: horizontal scrolling move strip */}
+      <div className="md:hidden rounded-lg bg-muted px-2 py-1">
+        <MoveStrip
+          history={history}
+          selectedMoveIndex={viewingMoveIndex}
+          classifications={classifications}
+          onSelectMove={onSelectMove}
+        />
+      </div>
+
+      {/* Desktop: full move history */}
+      <div className="hidden md:block min-h-0 flex-1 overflow-auto rounded-lg bg-muted p-2">
         <MoveHistory
           history={history}
           selectedMoveIndex={viewingMoveIndex}
           classifications={classifications}
           onSelectMove={onSelectMove}
         />
-        {viewingMoveIndex != null && !isAnalysisMode && (
-          <button
-            onClick={onReturnToLive}
-            className="mt-1 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
-          >
-            ▶ Live
-          </button>
-        )}
       </div>
+
+      {viewingMoveIndex != null && !isAnalysisMode && (
+        <button
+          onClick={onReturnToLive}
+          className="w-full rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
+        >
+          ▶ Live
+        </button>
+      )}
 
       {viewedAnnotation && (
         <MoveAnnotation {...viewedAnnotation} />
@@ -205,6 +246,11 @@ export function GameSidebar({
             onAnalyze={onAnalyze}
             isAnalyzing={isAnalyzing}
             analysisProgress={analysisProgress}
+            winStreak={winStreak}
+            openingName={openingName?.name}
+            classifications={classifications}
+            history={history}
+            analysisBestMoves={analysisBestMoves}
           />
           {eloResult && (
             <div className="rounded-lg bg-muted p-3 text-center text-sm">

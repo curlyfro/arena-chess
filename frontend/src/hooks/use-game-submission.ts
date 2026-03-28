@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useLevelStore } from "@/stores/level-store";
 import { gameApi } from "@/lib/api";
+import { XP_REWARDS } from "@/constants/xp-config";
 import type { GameStatus, GameResult } from "@/types/chess";
 import type { GameSession } from "@/types/game";
 import type { UseGameClockReturn } from "@/hooks/use-game-clock";
 import type { UseStockfishWorkerReturn } from "@/hooks/use-stockfish-worker";
+import type { SoundType } from "@/lib/sounds";
 
 function statusToTermination(status: GameStatus): string {
   const map: Record<string, string> = {
@@ -33,7 +36,7 @@ export function useGameSubmission(
   clockRef: React.RefObject<UseGameClockReturn>,
   engineRef: React.RefObject<UseStockfishWorkerReturn>,
   setAiThinking: (v: boolean) => void,
-  playSfxRef: React.RefObject<(sound: string) => void>,
+  playSfxRef: React.RefObject<(sound: SoundType) => void>,
   isGameOver: boolean,
   gameStatus: GameStatus,
   gameResult: GameResult,
@@ -76,8 +79,12 @@ export function useGameSubmission(
       playerResult = "loss";
     }
 
-    const durationSeconds = Math.round((Date.now() - gameStartTimeRef.current) / 1000);
-    const pgn = gameRef.current.pgn() + " " + gameResult;
+    const durationSeconds = Math.max(1, Math.round((Date.now() - gameStartTimeRef.current) / 1000));
+    const rawPgn = gameRef.current.pgn()
+      .replace('[Result "*"]', `[Result "${gameResult}"]`)
+      .replace(/ \*\s*$/, ` ${gameResult}`);
+    // Strip all PGN headers — backend validator parses movetext only
+    const pgn = rawPgn.replace(/\[[^\]]*\]\s*/g, "").trim();
     const timeControl = sess.timeControl.category;
 
     gameApi.submit({
@@ -120,6 +127,12 @@ export function useGameSubmission(
       }
 
       useAuthStore.getState().refreshProfile();
+
+      // Award XP
+      let xp = XP_REWARDS.gameComplete;
+      if (playerResult === "win") xp += XP_REWARDS.gameWin;
+      if (playerResult === "win" && gameStatus === "checkmate") xp += XP_REWARDS.gameCheckmate;
+      useLevelStore.getState().addXp(xp);
     }).catch((err) => {
       console.error("Failed to submit game:", err?.response?.data ?? err);
       setGameSubmitError("Failed to save game result. Your rating was not updated.");

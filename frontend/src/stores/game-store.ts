@@ -32,7 +32,12 @@ interface PreferencesSlice {
   soundVolume: number;
   showCoordinates: boolean;
   showEvalBar: boolean;
+  autoAnalyze: boolean;
+  avatarId: string | null;
+  avatarImage: string | null;
   lastGameSettings: LastGameSettings | null;
+  winStreak: number;
+  bestWinStreak: number;
   setBoardThemeId: (id: string) => void;
   setPieceSet: (set: PieceSet) => void;
   flipBoard: () => void;
@@ -40,7 +45,12 @@ interface PreferencesSlice {
   setSoundVolume: (volume: number) => void;
   setShowCoordinates: (on: boolean) => void;
   setShowEvalBar: (on: boolean) => void;
+  setAutoAnalyze: (on: boolean) => void;
+  setAvatarId: (id: string | null) => void;
+  setAvatarImage: (dataUrl: string | null) => void;
   setLastGameSettings: (settings: LastGameSettings) => void;
+  incrementWinStreak: () => void;
+  resetWinStreak: () => void;
 }
 
 // ── Game state (ephemeral) ──
@@ -140,7 +150,12 @@ export const useGameStore = create<GameStore>()(
       soundVolume: 50,
       showCoordinates: true,
       showEvalBar: true,
+      autoAnalyze: false,
+      avatarId: null as string | null,
+      avatarImage: null as string | null,
       lastGameSettings: null,
+      winStreak: 0,
+      bestWinStreak: 0,
 
       setBoardThemeId: (id) => set({ boardThemeId: id }),
       setPieceSet: (pieceSet) => set({ pieceSet }),
@@ -152,7 +167,17 @@ export const useGameStore = create<GameStore>()(
       setSoundVolume: (volume) => set({ soundVolume: volume }),
       setShowCoordinates: (on) => set({ showCoordinates: on }),
       setShowEvalBar: (on) => set({ showEvalBar: on }),
+      setAutoAnalyze: (on) => set({ autoAnalyze: on }),
+      setAvatarId: (id) => set({ avatarId: id, avatarImage: null }),
+      setAvatarImage: (dataUrl) => set({ avatarImage: dataUrl, avatarId: null }),
       setLastGameSettings: (settings) => set({ lastGameSettings: settings }),
+      incrementWinStreak: () =>
+        set((state) => {
+          const next = state.winStreak + 1;
+          state.winStreak = next;
+          state.bestWinStreak = Math.max(state.bestWinStreak, next);
+        }),
+      resetWinStreak: () => set({ winStreak: 0 }),
 
       // ── Game state (ephemeral) ──
       ...initialGameState,
@@ -175,10 +200,10 @@ export const useGameStore = create<GameStore>()(
       pushEval: (evalScore) =>
         set((state) => {
           const MAX_EVAL_HISTORY = 500;
-          const next = [...state.evalHistory, evalScore];
-          state.evalHistory = next.length > MAX_EVAL_HISTORY
-            ? next.slice(-MAX_EVAL_HISTORY)
-            : next;
+          state.evalHistory.push(evalScore);
+          if (state.evalHistory.length > MAX_EVAL_HISTORY) {
+            state.evalHistory.splice(0, state.evalHistory.length - MAX_EVAL_HISTORY);
+          }
         }),
       setBestMoveArrow: (arrow) => set({ bestMoveArrow: arrow }),
 
@@ -192,7 +217,7 @@ export const useGameStore = create<GameStore>()(
     })),
     {
       name: "chess-arena-state",
-      version: 3,
+      version: 5,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -200,6 +225,14 @@ export const useGameStore = create<GameStore>()(
         }
         if (version < 3) {
           state.lastGameSettings = null;
+        }
+        if (version < 4) {
+          state.avatarId = null;
+          state.avatarImage = null;
+        }
+        if (version < 5) {
+          state.winStreak = 0;
+          state.bestWinStreak = 0;
         }
         return state as typeof persisted;
       },
@@ -212,7 +245,12 @@ export const useGameStore = create<GameStore>()(
         soundVolume: state.soundVolume,
         showCoordinates: state.showCoordinates,
         showEvalBar: state.showEvalBar,
+        autoAnalyze: state.autoAnalyze,
+        avatarId: state.avatarId,
+        avatarImage: state.avatarImage,
         lastGameSettings: state.lastGameSettings,
+        winStreak: state.winStreak,
+        bestWinStreak: state.bestWinStreak,
         // Active game (restored on reload)
         session: state.session,
         fen: state.fen,

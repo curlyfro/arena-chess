@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { XP_REWARDS } from "@/constants/xp-config";
+import { useLevelStore } from "@/stores/level-store";
+import { useChallengeStore } from "@/stores/challenge-store";
 
 interface PuzzleStore {
   puzzleRating: number;
@@ -50,7 +53,7 @@ export const usePuzzleStore = create<PuzzleStore>()(
       seenPuzzleIds: [],
       dailyCompletedDates: [],
 
-      recordCorrect: (puzzleRating: number) =>
+      recordCorrect: (puzzleRating: number) => {
         set((state) => {
           const expected = 1 / (1 + Math.pow(10, (puzzleRating - state.puzzleRating) / 400));
           const newRating = Math.round(state.puzzleRating + K_FACTOR * (1 - expected));
@@ -62,7 +65,11 @@ export const usePuzzleStore = create<PuzzleStore>()(
             totalSolved: state.totalSolved + 1,
             totalAttempted: state.totalAttempted + 1,
           };
-        }),
+        });
+        // Award XP for solving a puzzle
+        useLevelStore.getState().addXp(XP_REWARDS.puzzleSolve);
+        useChallengeStore.getState().onPuzzleSolved();
+      },
 
       recordIncorrect: () =>
         set((state) => {

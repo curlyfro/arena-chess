@@ -1,7 +1,11 @@
+import { useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useGameStore } from "@/stores/game-store";
 import { BOARD_THEMES, PIECE_SETS } from "@/constants/board-themes";
+import { AVATAR_PRESETS } from "@/constants/avatars";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { CloseIcon } from "@/components/ui/CloseIcon";
+import { resizeImageToDataUrl } from "@/lib/image-resize";
 
 interface SettingsDialogProps {
   readonly open: boolean;
@@ -61,6 +65,26 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const setShowCoordinates = useGameStore((s) => s.setShowCoordinates);
   const showEvalBar = useGameStore((s) => s.showEvalBar);
   const setShowEvalBar = useGameStore((s) => s.setShowEvalBar);
+  const autoAnalyze = useGameStore((s) => s.autoAnalyze);
+  const setAutoAnalyze = useGameStore((s) => s.setAutoAnalyze);
+  const avatarId = useGameStore((s) => s.avatarId);
+  const setAvatarId = useGameStore((s) => s.setAvatarId);
+  const avatarImage = useGameStore((s) => s.avatarImage);
+  const setAvatarImage = useGameStore((s) => s.setAvatarImage);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      setAvatarImage(dataUrl);
+    } catch {
+      // silently fail — user can retry
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  };
 
   return (
     <Dialog.Root open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
@@ -78,6 +102,79 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             >
               <CloseIcon />
             </Dialog.Close>
+          </div>
+
+          {/* Avatar */}
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
+              Avatar
+            </label>
+
+            {/* Upload / current photo */}
+            <div className="mb-3 flex items-center gap-3">
+              <PlayerAvatar
+                type="player"
+                name={avatarImage ? "" : "You"}
+                avatarId={avatarId}
+                avatarImage={avatarImage}
+                size={48}
+              />
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded bg-accent px-3 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
+                >
+                  Upload Photo
+                </button>
+                {avatarImage && (
+                  <button
+                    onClick={() => setAvatarImage(null)}
+                    className="rounded bg-muted px-3 py-1 text-xs text-muted-foreground hover:bg-border"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+
+            {/* Preset avatars */}
+            <div className="grid grid-cols-6 gap-2">
+              {AVATAR_PRESETS.map((preset) => {
+                const isSelected = !avatarImage && (
+                  preset.id === "initials"
+                    ? !avatarId || avatarId === "initials"
+                    : avatarId === preset.id
+                );
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => setAvatarId(preset.id === "initials" ? null : preset.id)}
+                    className={`flex flex-col items-center gap-1 rounded-lg p-1.5 transition-colors ${
+                      isSelected
+                        ? "ring-2 ring-accent bg-accent/20"
+                        : "hover:bg-muted/80"
+                    }`}
+                    title={preset.label}
+                  >
+                    {preset.id === "initials" ? (
+                      <PlayerAvatar type="player" name="You" size={32} />
+                    ) : (
+                      <PlayerAvatar type="player" name="" avatarId={preset.id} size={32} />
+                    )}
+                    <span className="text-[9px] text-muted-foreground truncate w-full text-center">
+                      {preset.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Board Theme */}
@@ -156,6 +253,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </SettingRow>
             <SettingRow label="Evaluation Bar">
               <ToggleSwitch checked={showEvalBar} onChange={setShowEvalBar} />
+            </SettingRow>
+            <SettingRow label="Auto-Analyze Games">
+              <ToggleSwitch checked={autoAnalyze} onChange={setAutoAnalyze} />
             </SettingRow>
           </div>
         </Dialog.Content>

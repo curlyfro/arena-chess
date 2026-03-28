@@ -20,10 +20,11 @@ const POPULAR_OPENINGS: readonly { name: string; moves: readonly string[] }[] = 
 interface OpeningSearchProps {
   readonly tree: OpeningTreeNode | null;
   readonly onSelect: (moves: readonly string[]) => void;
+  readonly initialQuery?: string;
 }
 
-export function OpeningSearch({ tree, onSelect }: OpeningSearchProps) {
-  const [query, setQuery] = useState("");
+export function OpeningSearch({ tree, onSelect, initialQuery = "" }: OpeningSearchProps) {
+  const [query, setQuery] = useState(initialQuery);
   const [focused, setFocused] = useState(false);
 
   const results = useMemo(

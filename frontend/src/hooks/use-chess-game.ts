@@ -66,13 +66,30 @@ export interface UseChessGameReturn {
   readonly board: readonly (BoardPiece | null)[][];
 }
 
+function buildChess(
+  initialFen?: string,
+  initialHistory?: readonly AnnotatedMove[],
+): Chess {
+  // When restoring a game with history, replay moves from the initial position
+  // so chess.js has the full game and generates correct PGN (no SetUp/FEN headers).
+  if (initialHistory && initialHistory.length > 0) {
+    const c = new Chess(INITIAL_FEN);
+    for (const move of initialHistory) {
+      const result = c.move({ from: move.from, to: move.to, promotion: move.promotion });
+      if (!result) break;
+    }
+    return c;
+  }
+  return new Chess(initialFen ?? INITIAL_FEN);
+}
+
 export function useChessGame(
   initialFen?: string,
   initialHistory?: readonly AnnotatedMove[],
   initialStatus?: GameStatus,
   initialTerminatingColor?: PieceColor,
 ): UseChessGameReturn {
-  const chessRef = useRef(new Chess(initialFen ?? INITIAL_FEN));
+  const chessRef = useRef(buildChess(initialFen, initialHistory));
   const [version, setVersion] = useState(0);
   const [annotatedHistory, setAnnotatedHistory] = useState<AnnotatedMove[]>(
     initialHistory ? [...initialHistory] : [],

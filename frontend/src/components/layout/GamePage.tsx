@@ -25,7 +25,12 @@ import { buildViewedAnnotation } from "@/lib/annotation";
 import { useSound } from "@/hooks/use-sound";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useAchievementChecker } from "@/hooks/use-achievement-checker";
+import { useChallengeStore } from "@/stores/challenge-store";
+import { getCoachTip, type CoachTip } from "@/lib/game-coach";
+import { CoachBubble } from "@/components/game/CoachBubble";
 import { parseUciMove } from "@/lib/uci";
+import { isPlayerWin } from "@/lib/game-utils";
+import { KeyboardShortcutHelp } from "@/components/ui/KeyboardShortcutHelp";
 import type { PieceColor, ChessMove } from "@/types/chess";
 import type { GameSession } from "@/types/game";
 
@@ -54,6 +59,7 @@ export function GamePage() {
   const [showNewGameDialog, setShowNewGameDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
 
   const authUser = useAuthStore((s) => s.user);
@@ -359,13 +365,25 @@ export function GamePage() {
   );
 
   const { checkGameAchievements } = useAchievementChecker();
+  const incrementWinStreak = useGameStore((s) => s.incrementWinStreak);
+  const resetWinStreak = useGameStore((s) => s.resetWinStreak);
+  const winStreak = useGameStore((s) => s.winStreak);
+  const onChallengeGameComplete = useChallengeStore((s) => s.onGameComplete);
 
-  // Check achievements when game ends and elo result comes back
+  // Check achievements and track win streak when game ends
   const achievementCheckedRef = useRef(false);
   useEffect(() => {
     if (!game.isGameOver || achievementCheckedRef.current) return;
     if (!session) return;
     achievementCheckedRef.current = true;
+
+    const playerWon = isPlayerWin(session.playerColor, game.result);
+    const isDraw = game.result === "1/2-1/2";
+    if (playerWon) incrementWinStreak();
+    else if (!isDraw) resetWinStreak();
+
+    onChallengeGameComplete(playerWon, session.engineLevel.level, session.playerColor);
+
     checkGameAchievements({
       result: game.result,
       playerColor: session.playerColor,
@@ -374,7 +392,7 @@ export function GamePage() {
       moveCount: game.history.length,
       eloAfter: eloResult?.after ?? null,
     });
-  }, [game.isGameOver, game.result, game.status, game.history.length, session, eloResult, checkGameAchievements]);
+  }, [game.isGameOver, game.result, game.status, game.history.length, session, eloResult, checkGameAchievements, incrementWinStreak, resetWinStreak, onChallengeGameComplete]);
 
   // Reset achievement check flag on new game
   useEffect(() => {
@@ -383,10 +401,42 @@ export function GamePage() {
     }
   }, [game.isGameOver]);
 
+  // Auto-analyze when game ends (if preference is on)
+  const autoAnalyze = useGameStore((s) => s.autoAnalyze);
+  const autoAnalyzeTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (game.isGameOver && autoAnalyze && !autoAnalyzeTriggeredRef.current && !isAnalyzing && !postGameStats) {
+      autoAnalyzeTriggeredRef.current = true;
+      // Small delay to let game-end UI render first
+      const timer = setTimeout(() => handleAnalyzeGame(), 1000);
+      return () => clearTimeout(timer);
+    }
+    if (!game.isGameOver) autoAnalyzeTriggeredRef.current = false;
+  }, [game.isGameOver, autoAnalyze, isAnalyzing, postGameStats, handleAnalyzeGame]);
+
   useKeyboardShortcuts({
     onHint: handleToggleHint,
     isGameActive: !!session && !game.isGameOver,
+    onToggleShortcutHelp: () => setShowShortcutHelp((v) => !v),
   });
+
+  // ── Coach mode (auto for levels 1-3) ──
+  const isCoachMode = !!session && session.engineLevel.level <= 3;
+  const [coachTip, setCoachTip] = useState<CoachTip | null>(null);
+  const prevEvalRef = useRef<typeof engine.evaluation>(null);
+
+  useEffect(() => {
+    if (!isCoachMode || !session || game.isGameOver) return;
+    const tip = getCoachTip(
+      game.history,
+      engine.evaluation,
+      prevEvalRef.current,
+      session.playerColor,
+      game.turn === session.playerColor,
+    );
+    if (tip) setCoachTip(tip);
+    prevEvalRef.current = engine.evaluation;
+  }, [engine.evaluation, isCoachMode, session, game.isGameOver, game.turn, game.history]);
 
   const isAnalysisMode = game.isGameOver && postGameStats !== null;
 
@@ -396,8 +446,18 @@ export function GamePage() {
   const bottomIsPlayer = bottomColor === playerColor;
 
   const aiLevelLabel = session
-    ? `AI L${session.engineLevel.level}`
+    ? `AI ${session.engineLevel.label}`
     : "AI";
+
+  const avatarId = useGameStore((s) => s.avatarId);
+  const avatarImage = useGameStore((s) => s.avatarImage);
+  const currentPlayerRating = session && authProfile
+    ? session.timeControl.category === "bullet" ? authProfile.eloBullet
+      : session.timeControl.category === "rapid" ? authProfile.eloRapid
+      : authProfile.eloBlitz
+    : undefined;
+
+  const initialMs = session?.timeControl.initialMs ?? 0;
 
   const showDashboard = !session || !hasResumableGame;
 
@@ -409,6 +469,7 @@ export function GamePage() {
       />
       <NewGameDialog open={showNewGameDialog} onClose={() => setShowNewGameDialog(false)} onStart={handleStartGame} />
       <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+      <KeyboardShortcutHelp open={showShortcutHelp} onClose={() => setShowShortcutHelp(false)} />
 
       {showDashboard ? (
         <Dashboard
@@ -459,11 +520,17 @@ export function GamePage() {
               isPlayer={topIsPlayer}
               playerName={playerName}
               aiLabel={aiLevelLabel}
+              aiLevel={session?.engineLevel.level}
+              aiElo={session?.engineLevel.elo}
+              playerRating={currentPlayerRating}
+              avatarId={avatarId}
+              avatarImage={avatarImage}
               isAiThinking={aiThinking}
               history={game.history}
               pieceSet={pieceSet}
               timeMsRef={topColor === "w" ? clock.whiteMsRef : clock.blackMsRef}
               timeMs={topColor === "w" ? clock.whiteMs : clock.blackMs}
+              initialMs={initialMs}
               isClockActive={clock.activeColor === topColor}
             />
 
@@ -500,16 +567,24 @@ export function GamePage() {
               />
             </div>
 
+            {isCoachMode && <CoachBubble tip={coachTip} />}
+
             <PlayerClockRow
               color={bottomColor}
               isPlayer={bottomIsPlayer}
               playerName={playerName}
               aiLabel={aiLevelLabel}
+              aiLevel={session?.engineLevel.level}
+              aiElo={session?.engineLevel.elo}
+              playerRating={currentPlayerRating}
+              avatarId={avatarId}
+              avatarImage={avatarImage}
               isAiThinking={aiThinking}
               history={game.history}
               pieceSet={pieceSet}
               timeMsRef={bottomColor === "w" ? clock.whiteMsRef : clock.blackMsRef}
               timeMs={bottomColor === "w" ? clock.whiteMs : clock.blackMs}
+              initialMs={initialMs}
               isClockActive={clock.activeColor === bottomColor}
             />
           </div>
@@ -553,6 +628,8 @@ export function GamePage() {
             viewedAnnotation={viewedAnnotation}
             onNextLevel={handleNextLevel}
             sessionLevel={session?.engineLevel.level}
+            winStreak={winStreak}
+            onToggleShortcutHelp={() => setShowShortcutHelp(true)}
           />
         </div>
         </>

@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useOpeningExplorer } from "@/hooks/use-opening-explorer";
 import { useBoardPreferences } from "@/hooks/use-board-theme";
 import { ChessBoard } from "@/components/board/ChessBoard";
@@ -11,6 +11,8 @@ const NOOP_PREMOVE = () => {};
 export function OpeningExplorerPage() {
   const explorer = useOpeningExplorer();
   const { theme, pieceSet, showCoordinates } = useBoardPreferences();
+  const [searchParams] = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
 
   if (explorer.isLoading) {
     return (
@@ -68,7 +70,7 @@ export function OpeningExplorerPage() {
 
         {/* Sidebar */}
         <div className="flex w-full flex-col gap-3 md:w-72 md:shrink-0 md:self-start">
-          <OpeningSearch tree={explorer.tree} onSelect={explorer.playLine} />
+          <OpeningSearch tree={explorer.tree} onSelect={explorer.playLine} initialQuery={initialQuery} />
 
           <MoveHistoryBreadcrumb
             moves={explorer.moveHistory}

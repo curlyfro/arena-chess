@@ -1,5 +1,6 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useGameStore } from "@/stores/game-store";
 import {
   playerApi,
   type PlayerProfile,
@@ -8,9 +9,13 @@ import {
 } from "@/lib/api";
 import { Link } from "react-router";
 import { TIME_CONTROL_LABELS, TITLE_COLORS, type TimeControl } from "@/constants/chess-labels";
+import { AI_NAME_MAP } from "@/constants/engine-levels";
 import { RatingCard } from "@/components/ui/RatingCard";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
+import { LevelBadge } from "@/components/ui/LevelBadge";
 import { useAchievementStore } from "@/stores/achievement-store";
 import { ACHIEVEMENTS } from "@/constants/achievements";
+import { resizeImageToDataUrl } from "@/lib/image-resize";
 
 const RatingChart = memo(function RatingChart({ history }: { readonly history: readonly RatingHistoryEntry[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -145,7 +150,7 @@ function GameRow({ game }: { readonly game: GameSummary }) {
     >
       <div className="flex items-center gap-3">
         <span className={`w-10 font-medium ${resultColor}`}>{game.result}</span>
-        <span className="text-muted-foreground">vs AI L{game.aiLevel}</span>
+        <span className="text-muted-foreground">vs {AI_NAME_MAP.get(game.aiLevel) ?? `AI L${game.aiLevel}`}</span>
         <span className="text-xs text-muted-foreground">{game.timeControl}</span>
       </div>
       <div className="flex items-center gap-3">
@@ -161,6 +166,22 @@ function GameRow({ game }: { readonly game: GameSummary }) {
 export function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const unlockedIds = useAchievementStore((s) => s.unlockedIds);
+  const avatarId = useGameStore((s) => s.avatarId);
+  const avatarImage = useGameStore((s) => s.avatarImage);
+  const setAvatarImage = useGameStore((s) => s.setAvatarImage);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      setAvatarImage(dataUrl);
+    } catch {
+      // silently fail
+    }
+    e.target.value = "";
+  };
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [ratingHistory, setRatingHistory] = useState<RatingHistoryEntry[]>([]);
@@ -245,17 +266,44 @@ export function ProfilePage() {
       ) : displayProfile ? (
         <div className="w-full max-w-3xl space-y-6">
           {/* Header */}
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-2xl font-bold text-foreground">
-              {(displayProfile.username[0] ?? "?").toUpperCase()}
+          <div className="flex items-center gap-6">
+            <div className="relative group">
+              <PlayerAvatar
+                type="player"
+                name={displayProfile.username}
+                avatarId={avatarId}
+                avatarImage={avatarImage}
+                size={128}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                Edit
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-foreground">{displayProfile.username}</h2>
-              {displayProfile.title && displayProfile.title !== "Beginner" && (
-                <span className={`text-sm font-medium ${TITLE_COLORS[displayProfile.title] ?? "text-muted-foreground"}`}>
-                  {displayProfile.title}
+              <div className="flex items-center gap-3">
+                <h2 className="text-3xl font-bold text-foreground">{displayProfile.username}</h2>
+                <LevelBadge size="lg" />
+              </div>
+              <div className="mt-1 flex items-center gap-4">
+                {displayProfile.title && displayProfile.title !== "Beginner" && (
+                  <span className={`text-lg font-medium ${TITLE_COLORS[displayProfile.title] ?? "text-muted-foreground"}`}>
+                    {displayProfile.title}
+                  </span>
+                )}
+                <span className="text-lg font-mono text-foreground">
+                  {displayProfile.eloBlitz}
                 </span>
-              )}
+              </div>
             </div>
           </div>
 

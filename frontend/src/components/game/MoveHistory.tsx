@@ -1,5 +1,7 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { lookupOpening } from "@/lib/openings";
+import { CLASSIFICATION_COLORS } from "@/constants/chess-labels";
 import type { AnnotatedMove, MoveClassification } from "@/types/chess";
 
 interface MoveHistoryProps {
@@ -17,15 +19,6 @@ interface MovePair {
   readonly blackIndex?: number;
 }
 
-const CLASSIFICATION_INDICATORS: Record<MoveClassification, { symbol: string; className: string }> = {
-  brilliant: { symbol: "!!", className: "text-blue-400" },
-  great:     { symbol: "!",  className: "text-teal-400" },
-  best:      { symbol: "",   className: "" },
-  good:      { symbol: "",   className: "" },
-  inaccuracy:{ symbol: "?!", className: "text-yellow-400" },
-  mistake:   { symbol: "?",  className: "text-orange-400" },
-  blunder:   { symbol: "??", className: "text-red-400" },
-};
 
 function pairMoves(history: readonly AnnotatedMove[]): MovePair[] {
   const pairs: MovePair[] = [];
@@ -41,14 +34,82 @@ function pairMoves(history: readonly AnnotatedMove[]): MovePair[] {
   return pairs;
 }
 
+/** Count non-pawn, non-king pieces on the board from a FEN string */
+function countMinorMajorPieces(fen: string): number {
+  const board = fen.split(" ")[0];
+  let count = 0;
+  for (const ch of board) {
+    if ("rnbqRNBQ".includes(ch)) count++;
+  }
+  return count;
+}
+
+type GamePhase = "opening" | "middlegame" | "endgame";
+
+/**
+ * Compute phase boundaries.
+ * Returns the move index (half-move) where each phase starts.
+ * Opening → Middlegame: when the opening name stops being recognized
+ * Middlegame → Endgame: when ≤ 6 minor/major pieces remain
+ */
+function computePhaseTransitions(history: readonly AnnotatedMove[]): {
+  middlegameStart: number | null;
+  endgameStart: number | null;
+} {
+  let middlegameStart: number | null = null;
+  let endgameStart: number | null = null;
+
+  // Find where opening ends
+  let lastOpeningIndex = -1;
+  for (let i = 0; i < history.length; i++) {
+    const match = lookupOpening(history.slice(0, i + 1));
+    if (match) lastOpeningIndex = i;
+  }
+
+  if (lastOpeningIndex >= 0 && lastOpeningIndex < history.length - 1) {
+    middlegameStart = lastOpeningIndex + 1;
+  }
+
+  // Find where endgame starts
+  for (let i = 0; i < history.length; i++) {
+    const pieces = countMinorMajorPieces(history[i].fen);
+    if (pieces <= 6) {
+      endgameStart = i;
+      break;
+    }
+  }
+
+  // Ensure endgame comes after middlegame
+  if (middlegameStart != null && endgameStart != null && endgameStart <= middlegameStart) {
+    middlegameStart = null; // Skip middlegame label if endgame starts during opening
+  }
+
+  return { middlegameStart, endgameStart };
+}
+
 function ClassificationBadge({ classification }: { readonly classification: MoveClassification | undefined }) {
   if (!classification) return null;
-  const indicator = CLASSIFICATION_INDICATORS[classification];
-  if (!indicator.symbol) return null;
+  const { symbol, text } = CLASSIFICATION_COLORS[classification];
+  if (!symbol) return null;
   return (
-    <span className={`ml-0.5 text-xs font-bold ${indicator.className}`}>
-      {indicator.symbol}
+    <span className={`ml-0.5 text-xs font-bold ${text}`}>
+      {symbol}
     </span>
+  );
+}
+
+function PhaseLabel({ phase }: { readonly phase: GamePhase }) {
+  const labels: Record<GamePhase, string> = {
+    opening: "Opening",
+    middlegame: "Middlegame",
+    endgame: "Endgame",
+  };
+  return (
+    <div className="flex items-center gap-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="flex-1 border-t border-border" />
+      <span>{labels[phase]}</span>
+      <div className="flex-1 border-t border-border" />
+    </div>
   );
 }
 
@@ -61,27 +122,67 @@ export const MoveHistory = memo(function MoveHistory({
   const parentRef = useRef<HTMLDivElement>(null);
   const pairs = pairMoves(history);
 
+  const { middlegameStart, endgameStart } = useMemo(
+    () => computePhaseTransitions(history),
+    [history],
+  );
+
+  // Convert half-move indices to pair indices
+  const middlegamePairIdx = middlegameStart != null ? Math.floor(middlegameStart / 2) : null;
+  const endgamePairIdx = endgameStart != null ? Math.floor(endgameStart / 2) : null;
+
+  // Build row items: each is either a move pair or a phase divider
+  type RowItem =
+    | { type: "pair"; pair: MovePair; pairIndex: number }
+    | { type: "phase"; phase: GamePhase };
+
+  const rows = useMemo(() => {
+    const items: RowItem[] = [];
+    const insertedPhases = new Set<number>();
+
+    for (let i = 0; i < pairs.length; i++) {
+      // Insert middlegame divider before its pair
+      if (middlegamePairIdx === i && !insertedPhases.has(i)) {
+        items.push({ type: "phase", phase: "middlegame" });
+        insertedPhases.add(i);
+      }
+      // Insert endgame divider before its pair
+      if (endgamePairIdx === i && !insertedPhases.has(i)) {
+        items.push({ type: "phase", phase: "endgame" });
+        insertedPhases.add(i);
+      }
+      items.push({ type: "pair", pair: pairs[i], pairIndex: i });
+    }
+    return items;
+  }, [pairs, middlegamePairIdx, endgamePairIdx]);
+
   const virtualizer = useVirtualizer({
-    count: pairs.length,
+    count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 32,
+    estimateSize: (idx) => rows[idx].type === "phase" ? 22 : 32,
     overscan: 5,
   });
 
   // Auto-scroll to bottom on new moves (when not viewing history)
   useEffect(() => {
-    if (pairs.length > 0 && selectedMoveIndex == null) {
-      virtualizer.scrollToIndex(pairs.length - 1, { align: "end" });
+    if (rows.length > 0 && selectedMoveIndex == null) {
+      virtualizer.scrollToIndex(rows.length - 1, { align: "end" });
     }
-  }, [pairs.length, virtualizer, selectedMoveIndex]);
+  }, [rows.length, virtualizer, selectedMoveIndex]);
 
   // Scroll to selected move when navigating history
   useEffect(() => {
     if (selectedMoveIndex != null) {
       const pairIdx = Math.floor(selectedMoveIndex / 2);
-      virtualizer.scrollToIndex(pairIdx, { align: "center" });
+      // Find the row index for this pair
+      const rowIdx = rows.findIndex(
+        (r) => r.type === "pair" && r.pairIndex === pairIdx,
+      );
+      if (rowIdx >= 0) {
+        virtualizer.scrollToIndex(rowIdx, { align: "center" });
+      }
     }
-  }, [selectedMoveIndex, virtualizer]);
+  }, [selectedMoveIndex, virtualizer, rows]);
 
   if (history.length === 0) {
     return (
@@ -106,8 +207,25 @@ export const MoveHistory = memo(function MoveHistory({
         }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
-          const pair = pairs[virtualRow.index];
-          const isLastPair = virtualRow.index === pairs.length - 1;
+          const row = rows[virtualRow.index];
+
+          if (row.type === "phase") {
+            return (
+              <div
+                key={`phase-${row.phase}`}
+                className="absolute left-0 top-0 flex w-full items-center px-1"
+                style={{
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <PhaseLabel phase={row.phase} />
+              </div>
+            );
+          }
+
+          const pair = row.pair;
+          const isLastPair = row.pairIndex === pairs.length - 1;
           const whiteSelected = selectedMoveIndex === pair.whiteIndex;
           const blackSelected = pair.blackIndex != null && selectedMoveIndex === pair.blackIndex;
           const whiteIsLatest = isLive && isLastPair && !pair.black;

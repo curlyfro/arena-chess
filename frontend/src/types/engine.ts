@@ -1,6 +1,7 @@
 export interface EngineLevel {
   readonly level: number;
   readonly label: string;
+  readonly name: string;
   readonly skillLevel: number;
   readonly depth: number;
   readonly moveTimeMs: number;

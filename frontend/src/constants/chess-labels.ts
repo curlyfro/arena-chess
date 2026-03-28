@@ -26,3 +26,14 @@ export function formatTitle(title: string): string {
 export const FAVORABLE_CLASSIFICATIONS: readonly MoveClassification[] = [
   "brilliant", "great", "best", "good",
 ];
+
+/** Shared classification colors used by MoveHistory, MoveStrip, and GameRecap. */
+export const CLASSIFICATION_COLORS: Record<MoveClassification, { text: string; symbol: string }> = {
+  brilliant:  { text: "text-blue-400",   symbol: "!!" },
+  great:      { text: "text-teal-400",   symbol: "!" },
+  best:       { text: "",                symbol: "" },
+  good:       { text: "",                symbol: "" },
+  inaccuracy: { text: "text-yellow-400", symbol: "?!" },
+  mistake:    { text: "text-orange-400", symbol: "?" },
+  blunder:    { text: "text-red-400",    symbol: "??" },
+};
