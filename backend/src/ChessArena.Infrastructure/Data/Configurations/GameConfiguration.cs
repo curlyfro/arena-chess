@@ -1,9 +1,11 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ChessArena.Infrastructure.Data.Configurations;
 
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public class GameConfiguration : IEntityTypeConfiguration<Game>
 {
     public void Configure(EntityTypeBuilder<Game> builder)

@@ -1,4 +1,5 @@
-﻿using System;
+﻿// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -7,6 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ChessArena.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
     public partial class InitialCreate : Migration
     {
         /// <inheritdoc />

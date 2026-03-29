@@ -1,23 +1,25 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using Amazon.DynamoDBv2;
 using ChessArena.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using ChessArena.Application.Services;
 using ChessArena.Application.Validators;
 using ChessArena.Core.Interfaces;
-using ChessArena.Infrastructure.Cache;
-using ChessArena.Infrastructure.Data;
+using ChessArena.Infrastructure.Auth;
+using ChessArena.Infrastructure.DynamoDb;
+using ChessArena.Infrastructure.DynamoDb.Auth;
+using ChessArena.Infrastructure.DynamoDb.Identity;
+using ChessArena.Infrastructure.DynamoDb.Queries;
+using ChessArena.Infrastructure.DynamoDb.Repositories;
 using ChessArena.Infrastructure.Identity;
-using ChessArena.Infrastructure.Repositories;
-using ChessArena.Infrastructure.Queries;
 using ChessArena.Infrastructure.Validation;
 using ChessArena.Application.Queries;
 using ChessArena.BackgroundJobs;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,12 +29,17 @@ builder.Host.UseSerilog((ctx, lc) => lc
     .ReadFrom.Configuration(ctx.Configuration)
     .WriteTo.Console());
 
-// ── Database ──
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+// ── DynamoDB ──
+builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
+{
+    var serviceUrl = builder.Configuration["DynamoDB:ServiceUrl"] ?? "http://localhost:8000";
+    var config = new AmazonDynamoDBConfig { ServiceURL = serviceUrl };
+    return new AmazonDynamoDBClient("local", "local", config);
+});
+builder.Services.AddHostedService<DynamoDbTableInitializer>();
 
-// ── ASP.NET Identity ──
+// ── ASP.NET Identity (DynamoDB stores) ──
+builder.Services.AddScoped<DynamoUnitOfWork>();
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         options.User.RequireUniqueEmail = true;
@@ -45,7 +52,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         options.Lockout.AllowedForNewUsers = true;
     })
-    .AddEntityFrameworkStores<AppDbContext>()
+    .AddUserStore<DynamoUserStore>()
+    .AddRoleStore<DynamoRoleStore>()
     .AddDefaultTokenProviders();
 
 // ── JWT Authentication ──
@@ -87,23 +95,26 @@ builder.Services.AddHybridCache(options =>
 });
 
 // ── Unit of Work ──
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DynamoUnitOfWork>());
 
 // ── Application Services ──
 builder.Services.AddSingleton<IEloRatingService, EloRatingService>();
 builder.Services.AddSingleton<TitleAwardService>();
 builder.Services.AddSingleton<IPgnValidator, PgnValidator>();
 builder.Services.AddScoped<IGameResultService, GameResultService>();
-builder.Services.AddScoped<ISessionCapService, SessionCapService>();
+builder.Services.AddScoped<ISessionCapService, DynamoSessionCapService>();
 
 // ── Repositories ──
-builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
-builder.Services.AddScoped<IGameRepository, GameRepository>();
-builder.Services.AddScoped<IRatingHistoryRepository, RatingHistoryRepository>();
+builder.Services.AddScoped<IPlayerRepository, DynamoPlayerRepository>();
+builder.Services.AddScoped<IGameRepository, DynamoGameRepository>();
+builder.Services.AddScoped<IRatingHistoryRepository, DynamoRatingHistoryRepository>();
 
 // ── Queries ──
-builder.Services.AddScoped<IPlayerStatsQuery, PlayerStatsQuery>();
-builder.Services.AddScoped<ILeaderboardQuery, LeaderboardQuery>();
+builder.Services.AddScoped<IPlayerStatsQuery, DynamoPlayerStatsQuery>();
+builder.Services.AddScoped<ILeaderboardQuery, DynamoLeaderboardQuery>();
+
+// ── Refresh Token Store ──
+builder.Services.AddScoped<IRefreshTokenStore, DynamoRefreshTokenStore>();
 
 // ── FluentValidation ──
 builder.Services.AddFluentValidationAutoValidation();
@@ -185,11 +196,11 @@ app.UseRateLimiter();
 app.MapControllers();
 
 // ── Minimal API endpoints ──
-app.MapGet("/api/health", async (AppDbContext db) =>
+app.MapGet("/api/health", async (IAmazonDynamoDB dynamo) =>
 {
     try
     {
-        await db.Database.CanConnectAsync();
+        await dynamo.DescribeTableAsync(DynamoConstants.TableName);
         return Results.Ok(new { Status = "healthy", Database = "connected" });
     }
     catch

@@ -1,3 +1,4 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Core.Entities;
 using ChessArena.Core.Interfaces;
 using ChessArena.Infrastructure.Data;
@@ -5,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChessArena.Infrastructure.Repositories;
 
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public sealed class PlayerRepository(AppDbContext db) : IPlayerRepository
 {
     public async Task<Player?> GetByIdAsync(Guid id, CancellationToken ct = default)

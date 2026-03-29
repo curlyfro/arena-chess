@@ -1,3 +1,4 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Core.Entities;
 using ChessArena.Infrastructure.Data.Entities;
 using ChessArena.Infrastructure.Identity;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChessArena.Infrastructure.Data;
 
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
     public DbSet<Player> Players => Set<Player>();

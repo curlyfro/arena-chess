@@ -10,5 +10,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+
 volumes:
   pgdata:

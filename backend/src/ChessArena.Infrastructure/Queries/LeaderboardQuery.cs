@@ -1,3 +1,4 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Application.DTOs.Leaderboard;
 using ChessArena.Application.Queries;
 using ChessArena.Core.Enums;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChessArena.Infrastructure.Queries;
 
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public sealed class LeaderboardQuery(AppDbContext db) : ILeaderboardQuery
 {
     public async Task<List<LeaderboardEntryResponse>> GetTopPlayersAsync(

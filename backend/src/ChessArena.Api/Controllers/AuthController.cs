@@ -5,14 +5,13 @@ using System.Text;
 using ChessArena.Application.DTOs.Auth;
 using ChessArena.Core.Entities;
 using ChessArena.Core.Interfaces;
-using ChessArena.Infrastructure.Data;
 using ChessArena.Infrastructure.Data.Entities;
+using ChessArena.Infrastructure.Auth;
 using ChessArena.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ChessArena.Api.Controllers;
@@ -26,7 +25,7 @@ public class AuthController(
     IPlayerRepository playerRepository,
     IUnitOfWork unitOfWork,
     IConfiguration configuration,
-    AppDbContext dbContext) : ControllerBase
+    IRefreshTokenStore refreshTokenStore) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(
@@ -107,14 +106,15 @@ public class AuthController(
         CancellationToken ct)
     {
         var tokenHash = HashToken(request.RefreshToken);
-        var storedToken = await dbContext.RefreshTokens
-            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
+        var storedToken = await refreshTokenStore.GetByTokenHashAsync(tokenHash, ct);
 
         if (storedToken == null || !storedToken.IsActive)
             return Unauthorized(new { Error = "Invalid or expired refresh token" });
 
         // Revoke the used token (rotation)
         storedToken.RevokedAt = DateTime.UtcNow;
+        await refreshTokenStore.AddAsync(storedToken, ct);
+        await refreshTokenStore.SaveChangesAsync(ct);
 
         var user = await userManager.FindByIdAsync(storedToken.UserId);
         if (user == null)
@@ -136,13 +136,13 @@ public class AuthController(
         CancellationToken ct)
     {
         var tokenHash = HashToken(request.RefreshToken);
-        var storedToken = await dbContext.RefreshTokens
-            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
+        var storedToken = await refreshTokenStore.GetByTokenHashAsync(tokenHash, ct);
 
         if (storedToken is { IsActive: true })
         {
             storedToken.RevokedAt = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync(ct);
+            await refreshTokenStore.AddAsync(storedToken, ct);
+            await refreshTokenStore.SaveChangesAsync(ct);
         }
 
         return NoContent();
@@ -212,8 +212,8 @@ public class AuthController(
             CreatedAt = DateTime.UtcNow,
         };
 
-        dbContext.RefreshTokens.Add(refreshToken);
-        await dbContext.SaveChangesAsync(ct);
+        await refreshTokenStore.AddAsync(refreshToken, ct);
+        await refreshTokenStore.SaveChangesAsync(ct);
 
         return rawToken;
     }

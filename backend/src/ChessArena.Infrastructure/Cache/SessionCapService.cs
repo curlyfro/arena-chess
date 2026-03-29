@@ -1,3 +1,4 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Core.Constants;
 using ChessArena.Core.Interfaces;
 using ChessArena.Infrastructure.Data;
@@ -8,6 +9,7 @@ namespace ChessArena.Infrastructure.Cache;
 /// <summary>
 /// Enforces a rolling 24-hour cap on ELO gains by querying recent game results.
 /// </summary>
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public sealed class SessionCapService(AppDbContext db) : ISessionCapService
 {
     public async Task<bool> CheckAndIncrementAsync(

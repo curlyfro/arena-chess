@@ -1,24 +1,12 @@
-// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Application.DTOs.Players;
-using ChessArena.Application.Queries;
 using ChessArena.Core.Enums;
-using ChessArena.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
-namespace ChessArena.Infrastructure.Queries;
+namespace ChessArena.Application.Services;
 
-[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
-public sealed class PlayerStatsQuery(AppDbContext db) : IPlayerStatsQuery
+public static class PlayerStatsCalculator
 {
-    public async Task<PlayerStatsResponse> GetAsync(Guid playerId, CancellationToken ct = default)
+    public static PlayerStatsResponse Compute(IReadOnlyList<GameResult> results)
     {
-        // Single query: fetch ordered results for both counts and streak calculation
-        var results = await db.Games
-            .Where(g => g.PlayerId == playerId)
-            .OrderBy(g => g.PlayedAt)
-            .Select(g => g.Result)
-            .ToListAsync(ct);
-
         if (results.Count == 0)
             return new PlayerStatsResponse(0, 0, 0, 0, 0, 0, 0);
 

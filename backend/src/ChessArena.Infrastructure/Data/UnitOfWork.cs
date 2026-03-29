@@ -1,8 +1,10 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Core.Interfaces;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ChessArena.Infrastructure.Data;
 
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public sealed class UnitOfWork(AppDbContext db) : IUnitOfWork
 {
     private IDbContextTransaction? _transaction;

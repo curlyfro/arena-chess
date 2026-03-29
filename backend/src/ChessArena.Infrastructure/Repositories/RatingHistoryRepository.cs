@@ -1,3 +1,4 @@
+// DEPRECATED: EF/PostgreSQL — replaced by DynamoDb/ implementation. Remove after migration validation.
 using ChessArena.Core.Entities;
 using ChessArena.Core.Enums;
 using ChessArena.Core.Interfaces;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ChessArena.Infrastructure.Repositories;
 
+[Obsolete("EF/PostgreSQL — replaced by DynamoDB. Remove after migration validation.")]
 public sealed class RatingHistoryRepository(AppDbContext db) : IRatingHistoryRepository
 {
     public async Task<IReadOnlyList<RatingHistory>> GetByPlayerIdAsync(
