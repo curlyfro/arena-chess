@@ -32,6 +32,7 @@ public static class DynamoConstants
     public const string DetailSk = "DETAIL";
     public const string RefreshSk = "REFRESH";
     public const string PlayerLookupSk = "PLAYER_LOOKUP";
+    public const string PreferencesSk = "PREFERENCES";
 
     // Non-key attribute names
     public const string Version = "Version";

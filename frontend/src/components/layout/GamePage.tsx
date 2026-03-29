@@ -7,6 +7,7 @@ import { useGameSubmission } from "@/hooks/use-game-submission";
 import { useDrawOffer } from "@/hooks/use-draw-offer";
 import { useHistoryNavigation } from "@/hooks/use-history-navigation";
 import { useBoardPreferences } from "@/hooks/use-board-theme";
+import { usePreferencesSync } from "@/hooks/use-preferences-sync";
 import { useGameStore } from "@/stores/game-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { ENGINE_LEVELS } from "@/constants/engine-levels";
@@ -14,6 +15,7 @@ import { TIME_CONTROLS, DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import { ChessBoard } from "@/components/board/ChessBoard";
 import { PlayerClockRow } from "@/components/game/PlayerClockRow";
 import { EvalBar } from "@/components/game/EvalBar";
+import { MobileEvalPill } from "@/components/game/MobileEvalPill";
 import { GameHeader } from "@/components/game/GameHeader";
 import { GameSidebar } from "@/components/game/GameSidebar";
 import { Dashboard } from "./Dashboard";
@@ -70,6 +72,8 @@ export function GamePage() {
   useEffect(() => {
     authLoadUser();
   }, [authLoadUser]);
+
+  usePreferencesSync();
 
   const restoredFen = hasResumableGame ? storedFen : undefined;
   const restoredHistory = hasResumableGame ? storedHistory : undefined;
@@ -449,8 +453,10 @@ export function GamePage() {
     ? `AI ${session.engineLevel.label}`
     : "AI";
 
-  const avatarId = useGameStore((s) => s.avatarId);
-  const avatarImage = useGameStore((s) => s.avatarImage);
+  const storedAvatarId = useGameStore((s) => s.avatarId);
+  const storedAvatarImage = useGameStore((s) => s.avatarImage);
+  const avatarId = authUser ? storedAvatarId : null;
+  const avatarImage = authUser ? storedAvatarImage : null;
   const currentPlayerRating = session && authProfile
     ? session.timeControl.category === "bullet" ? authProfile.eloBullet
       : session.timeControl.category === "rapid" ? authProfile.eloRapid
@@ -468,7 +474,7 @@ export function GamePage() {
         onClose={() => setShowAuthModal(false)}
       />
       <NewGameDialog open={showNewGameDialog} onClose={() => setShowNewGameDialog(false)} onStart={handleStartGame} />
-      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} isAuthenticated={!!authUser} />
       <KeyboardShortcutHelp open={showShortcutHelp} onClose={() => setShowShortcutHelp(false)} />
 
       {showDashboard ? (
@@ -533,6 +539,16 @@ export function GamePage() {
               initialMs={initialMs}
               isClockActive={clock.activeColor === topColor}
             />
+
+            {showEvalBar && session && (
+              <MobileEvalPill
+                evaluation={viewingMoveIndex != null && analysisEvals[viewingMoveIndex + 1]
+                  ? analysisEvals[viewingMoveIndex + 1]
+                  : engine.evaluation}
+                playerColor={playerColor}
+                flipped={isFlipped}
+              />
+            )}
 
             <div className="relative">
               {showEvalBar && (

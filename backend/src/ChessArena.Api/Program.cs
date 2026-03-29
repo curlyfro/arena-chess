@@ -34,7 +34,7 @@ builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
 {
     var serviceUrl = builder.Configuration["DynamoDB:ServiceUrl"] ?? "http://localhost:8000";
     var config = new AmazonDynamoDBConfig { ServiceURL = serviceUrl };
-    return new AmazonDynamoDBClient("local", "local", config);
+    return new AmazonDynamoDBClient("fakeAccessKeyId", "fakeSecretAccessKey", config);
 });
 builder.Services.AddHostedService<DynamoDbTableInitializer>();
 
@@ -115,6 +115,9 @@ builder.Services.AddScoped<ILeaderboardQuery, DynamoLeaderboardQuery>();
 
 // ── Refresh Token Store ──
 builder.Services.AddScoped<IRefreshTokenStore, DynamoRefreshTokenStore>();
+
+// ── Preferences ──
+builder.Services.AddScoped<IPreferencesRepository, DynamoPreferencesRepository>();
 
 // ── FluentValidation ──
 builder.Services.AddFluentValidationAutoValidation();
