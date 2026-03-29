@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef } from "react";
 import type { PieceColor, PieceSymbol, AnnotatedMove, PieceSet } from "@/types/chess";
 import { getPieceUrl } from "@/lib/piece-url";
 
@@ -66,23 +66,43 @@ export const CapturedPieces = memo(function CapturedPieces({
     [history, color],
   );
 
+  const prevCountRef = useRef<number>(0);
+  const captureCounterRef = useRef<number>(0);
+
+  if (pieces.length > prevCountRef.current) {
+    captureCounterRef.current++;
+  }
+  prevCountRef.current = pieces.length;
+
   if (pieces.length === 0 && advantage <= 0) return null;
 
   // The captured pieces belong to the opponent
   const capturedColor: PieceColor = color === "w" ? "b" : "w";
+  const lastIndex = pieces.length - 1;
 
   return (
     <div className="flex items-center -space-x-1 h-7">
       {pieces.map((piece, i) => (
         <img
-          key={`${piece}-${i}`}
+          key={
+            i === lastIndex
+              ? `${piece}-${i}-${captureCounterRef.current}`
+              : `${piece}-${i}`
+          }
           src={getPieceUrl(capturedColor, piece, pieceSet)}
           alt={piece}
-          className="h-7 w-7 drop-shadow-[0_0_1px_rgba(255,255,255,0.8)]"
+          className={
+            i === lastIndex
+              ? "h-7 w-7 drop-shadow-[0_0_1px_rgba(255,255,255,0.8)] animate-in zoom-in-50 duration-300"
+              : "h-7 w-7 drop-shadow-[0_0_1px_rgba(255,255,255,0.8)]"
+          }
         />
       ))}
       {advantage > 0 && (
-        <span className="ml-1 text-xs font-bold text-muted-foreground">
+        <span
+          key={advantage}
+          className="ml-1.5 rounded-full bg-success/20 px-1.5 py-0.5 text-[11px] font-bold text-success animate-in zoom-in-75 duration-200"
+        >
           +{advantage}
         </span>
       )}

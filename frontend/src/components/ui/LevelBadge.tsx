@@ -24,7 +24,7 @@ export const LevelBadge = memo(function LevelBadge({ showProgress, size = "sm" }
       {showProgress && (
         <div className={`${barHeight} ${barWidth} overflow-hidden rounded-full bg-border`}>
           <div
-            className="h-full rounded-full bg-warning transition-all"
+            className="h-full rounded-full bg-warning transition-all duration-500 ease-out"
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>

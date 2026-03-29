@@ -10,6 +10,7 @@ export interface EngineLevel {
   readonly limitStrength: boolean;
   readonly blunderChance: number; // 0-1, probability of playing a random legal move
   readonly description: string;
+  readonly tagline: string;
 }
 
 export interface EvalScore {

@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { initAudio } from "@/lib/sounds";
 import { useGameStore } from "@/stores/game-store";
 import { CloseIcon } from "@/components/ui/CloseIcon";
+import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { ENGINE_LEVELS } from "@/constants/engine-levels";
 import { TIME_CONTROLS, DEFAULT_TIME_CONTROL } from "@/constants/time-controls";
 import type { PieceColor } from "@/types/chess";
@@ -88,16 +89,26 @@ export function NewGameDialog({ open, onClose, onStart }: NewGameDialogProps) {
                 <button
                   key={level.level}
                   onClick={() => setSelectedLevel(level)}
-                  className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                  className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                     selectedLevel.level === level.level
                       ? "bg-accent text-accent-foreground ring-2 ring-accent"
                       : "bg-muted text-foreground hover:bg-muted/80"
                   }`}
                 >
-                  <div className="font-semibold">
-                    {level.name}
+                  <div className="mt-0.5 flex-shrink-0">
+                    <PlayerAvatar type="ai" name={level.name} aiLevel={level.level} size={28} />
                   </div>
-                  <div className="text-xs opacity-70">L{level.level} {level.label} ~{level.elo}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-semibold">{level.name}</span>
+                      <span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] leading-none opacity-70">
+                        ~{level.elo}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs italic text-muted-foreground">
+                      {level.tagline}
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>

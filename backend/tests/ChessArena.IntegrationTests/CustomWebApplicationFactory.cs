@@ -30,9 +30,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             {
                 var config = new AmazonDynamoDBConfig
                 {
-                    ServiceURL = $"http://localhost:{port}"
+                    ServiceURL = $"http://localhost:{port}",
                 };
-                return new AmazonDynamoDBClient("test", "test", config);
+                return new AmazonDynamoDBClient("fakeAccessKeyId", "fakeSecretAccessKey", config);
             });
         });
 

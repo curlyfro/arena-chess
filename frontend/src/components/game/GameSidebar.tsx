@@ -251,6 +251,7 @@ export function GameSidebar({
             classifications={classifications}
             history={history}
             analysisBestMoves={analysisBestMoves}
+            eloAfter={eloResult?.after}
           />
           {eloResult && (
             <div className="rounded-lg bg-muted p-3 text-center text-sm">

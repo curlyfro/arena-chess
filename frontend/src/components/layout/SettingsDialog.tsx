@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useGameStore } from "@/stores/game-store";
 import { BOARD_THEMES, PIECE_SETS } from "@/constants/board-themes";
@@ -10,6 +10,7 @@ import { resizeImageToDataUrl } from "@/lib/image-resize";
 interface SettingsDialogProps {
   readonly open: boolean;
   readonly onClose: () => void;
+  readonly isAuthenticated?: boolean;
 }
 
 function ToggleSwitch({
@@ -52,7 +53,40 @@ function SettingRow({
   );
 }
 
-export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+type SettingsTab = "appearance" | "avatar" | "preferences";
+
+const TABS: { id: SettingsTab; label: string }[] = [
+  { id: "appearance", label: "Appearance" },
+  { id: "avatar", label: "Avatar" },
+  { id: "preferences", label: "Preferences" },
+];
+
+function MiniBoard({ themeId }: { readonly themeId: string }) {
+  const theme = BOARD_THEMES.find((t) => t.id === themeId) ?? BOARD_THEMES[0];
+  return (
+    <div className="mt-3 grid grid-cols-4 overflow-hidden rounded" style={{ width: 120, height: 120 }}>
+      {Array.from({ length: 16 }).map((_, i) => {
+        const row = Math.floor(i / 4);
+        const col = i % 4;
+        const isLight = (row + col) % 2 === 0;
+        return (
+          <div
+            key={i}
+            style={{
+              width: 30,
+              height: 30,
+              backgroundColor: isLight ? theme.lightSquare : theme.darkSquare,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+export function SettingsDialog({ open, onClose, isAuthenticated }: SettingsDialogProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>("appearance");
+  const visibleTabs = isAuthenticated ? TABS : TABS.filter((t) => t.id !== "avatar");
   const boardThemeId = useGameStore((s) => s.boardThemeId);
   const setBoardThemeId = useGameStore((s) => s.setBoardThemeId);
   const pieceSet = useGameStore((s) => s.pieceSet);
@@ -104,159 +138,192 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </Dialog.Close>
           </div>
 
-          {/* Avatar */}
-          <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-muted-foreground">
-              Avatar
-            </label>
-
-            {/* Upload / current photo */}
-            <div className="mb-3 flex items-center gap-3">
-              <PlayerAvatar
-                type="player"
-                name={avatarImage ? "" : "You"}
-                avatarId={avatarId}
-                avatarImage={avatarImage}
-                size={48}
-              />
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded bg-accent px-3 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
-                >
-                  Upload Photo
-                </button>
-                {avatarImage && (
-                  <button
-                    onClick={() => setAvatarImage(null)}
-                    className="rounded bg-muted px-3 py-1 text-xs text-muted-foreground hover:bg-border"
-                  >
-                    Remove Photo
-                  </button>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </div>
-
-            {/* Preset avatars */}
-            <div className="grid grid-cols-6 gap-2">
-              {AVATAR_PRESETS.map((preset) => {
-                const isSelected = !avatarImage && (
-                  preset.id === "initials"
-                    ? !avatarId || avatarId === "initials"
-                    : avatarId === preset.id
-                );
-                return (
-                  <button
-                    key={preset.id}
-                    onClick={() => setAvatarId(preset.id === "initials" ? null : preset.id)}
-                    className={`flex flex-col items-center gap-1 rounded-lg p-1.5 transition-colors ${
-                      isSelected
-                        ? "ring-2 ring-accent bg-accent/20"
-                        : "hover:bg-muted/80"
-                    }`}
-                    title={preset.label}
-                  >
-                    {preset.id === "initials" ? (
-                      <PlayerAvatar type="player" name="You" size={32} />
-                    ) : (
-                      <PlayerAvatar type="player" name="" avatarId={preset.id} size={32} />
-                    )}
-                    <span className="text-[9px] text-muted-foreground truncate w-full text-center">
-                      {preset.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Tab navigation */}
+          <div className="mb-4 flex gap-1 rounded-lg bg-muted p-1">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* Board Theme */}
-          <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-muted-foreground">
-              Board Theme
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {BOARD_THEMES.map((theme) => (
-                <button
-                  key={theme.id}
-                  onClick={() => setBoardThemeId(theme.id)}
-                  className={`flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-sm transition-colors ${
-                    boardThemeId === theme.id
-                      ? "bg-accent text-accent-foreground ring-2 ring-accent"
-                      : "bg-muted text-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  <div className="flex overflow-hidden rounded">
-                    <div
-                      className="h-6 w-6"
-                      style={{ backgroundColor: theme.lightSquare }}
-                    />
-                    <div
-                      className="h-6 w-6"
-                      style={{ backgroundColor: theme.darkSquare }}
-                    />
+          {/* Tab content */}
+          <div className="overflow-y-auto max-h-[70vh]">
+            {activeTab === "appearance" && (
+              <>
+                {/* Board Theme */}
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                    Board Theme
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {BOARD_THEMES.map((theme) => (
+                      <button
+                        key={theme.id}
+                        onClick={() => setBoardThemeId(theme.id)}
+                        className={`flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-sm transition-colors ${
+                          boardThemeId === theme.id
+                            ? "bg-accent text-accent-foreground ring-2 ring-accent"
+                            : "bg-muted text-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        <div className="flex overflow-hidden rounded">
+                          <div
+                            className="h-6 w-6"
+                            style={{ backgroundColor: theme.lightSquare }}
+                          />
+                          <div
+                            className="h-6 w-6"
+                            style={{ backgroundColor: theme.darkSquare }}
+                          />
+                        </div>
+                        <span className="text-xs">{theme.name}</span>
+                      </button>
+                    ))}
                   </div>
-                  <span className="text-xs">{theme.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+                </div>
 
-          {/* Piece Set */}
-          <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-muted-foreground">
-              Piece Set
-            </label>
-            <div className="flex gap-2">
-              {PIECE_SETS.map((set) => (
-                <button
-                  key={set}
-                  onClick={() => setPieceSet(set)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium capitalize transition-colors ${
-                    pieceSet === set
-                      ? "bg-accent text-accent-foreground"
-                      : "bg-muted text-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {set}
-                </button>
-              ))}
-            </div>
-          </div>
+                {/* Piece Set */}
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                    Piece Set
+                  </label>
+                  <div className="flex gap-2">
+                    {PIECE_SETS.map((set) => (
+                      <button
+                        key={set}
+                        onClick={() => setPieceSet(set)}
+                        className={`flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium capitalize transition-colors ${
+                          pieceSet === set
+                            ? "bg-accent text-accent-foreground"
+                            : "bg-muted text-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {set}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Toggle settings */}
-          <div className="mb-2 border-t border-border pt-3">
-            <SettingRow label="Sound">
-              <ToggleSwitch checked={soundEnabled} onChange={setSoundEnabled} />
-            </SettingRow>
-            {soundEnabled && (
-              <SettingRow label="Volume">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={soundVolume}
-                  onChange={(e) => setSoundVolume(Number(e.target.value))}
-                  className="w-24 accent-accent"
-                />
-              </SettingRow>
+                {/* Mini board preview */}
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                    Preview
+                  </label>
+                  <MiniBoard themeId={boardThemeId} />
+                </div>
+              </>
             )}
-            <SettingRow label="Board Coordinates">
-              <ToggleSwitch checked={showCoordinates} onChange={setShowCoordinates} />
-            </SettingRow>
-            <SettingRow label="Evaluation Bar">
-              <ToggleSwitch checked={showEvalBar} onChange={setShowEvalBar} />
-            </SettingRow>
-            <SettingRow label="Auto-Analyze Games">
-              <ToggleSwitch checked={autoAnalyze} onChange={setAutoAnalyze} />
-            </SettingRow>
+
+            {activeTab === "avatar" && (
+              <div className="mb-4">
+                {/* Upload / current photo */}
+                <div className="mb-3 flex items-center gap-3">
+                  <PlayerAvatar
+                    type="player"
+                    name={avatarImage ? "" : "You"}
+                    avatarId={avatarId}
+                    avatarImage={avatarImage}
+                    size={48}
+                  />
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded bg-accent px-3 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
+                    >
+                      Upload Photo
+                    </button>
+                    {avatarImage && (
+                      <button
+                        onClick={() => setAvatarImage(null)}
+                        className="rounded bg-muted px-3 py-1 text-xs text-muted-foreground hover:bg-border"
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Preset avatars */}
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                  Preset Avatars
+                </label>
+                <div className="grid grid-cols-6 gap-2">
+                  {AVATAR_PRESETS.map((preset) => {
+                    const isSelected = !avatarImage && (
+                      preset.id === "initials"
+                        ? !avatarId || avatarId === "initials"
+                        : avatarId === preset.id
+                    );
+                    return (
+                      <button
+                        key={preset.id}
+                        onClick={() => setAvatarId(preset.id === "initials" ? null : preset.id)}
+                        className={`flex flex-col items-center gap-1 rounded-lg p-1.5 transition-colors ${
+                          isSelected
+                            ? "ring-2 ring-accent bg-accent/20"
+                            : "hover:bg-muted/80"
+                        }`}
+                        title={preset.label}
+                      >
+                        {preset.id === "initials" ? (
+                          <PlayerAvatar type="player" name="You" size={32} />
+                        ) : (
+                          <PlayerAvatar type="player" name="" avatarId={preset.id} size={32} />
+                        )}
+                        <span className="text-[9px] text-muted-foreground truncate w-full text-center">
+                          {preset.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "preferences" && (
+              <div className="mb-2">
+                <SettingRow label="Sound">
+                  <ToggleSwitch checked={soundEnabled} onChange={setSoundEnabled} />
+                </SettingRow>
+                {soundEnabled && (
+                  <SettingRow label="Volume">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={soundVolume}
+                      onChange={(e) => setSoundVolume(Number(e.target.value))}
+                      className="w-24 accent-accent"
+                    />
+                  </SettingRow>
+                )}
+                <SettingRow label="Board Coordinates">
+                  <ToggleSwitch checked={showCoordinates} onChange={setShowCoordinates} />
+                </SettingRow>
+                <SettingRow label="Evaluation Bar">
+                  <ToggleSwitch checked={showEvalBar} onChange={setShowEvalBar} />
+                </SettingRow>
+                <SettingRow label="Auto-Analyze Games">
+                  <ToggleSwitch checked={autoAnalyze} onChange={setAutoAnalyze} />
+                </SettingRow>
+              </div>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

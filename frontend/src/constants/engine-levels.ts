@@ -20,6 +20,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: true,
     blunderChance: 0.45,
     description: "Total novice",
+    tagline: "I'm still learning the pieces!",
   },
   {
     level: 2,
@@ -33,6 +34,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: true,
     blunderChance: 0.3,
     description: "Casual learner",
+    tagline: "Let's have a friendly game!",
   },
   {
     level: 3,
@@ -46,6 +48,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: true,
     blunderChance: 0.15,
     description: "Knows the rules",
+    tagline: "I know a few tricks now",
   },
   {
     level: 4,
@@ -59,6 +62,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: true,
     blunderChance: 0.08,
     description: "Casual club",
+    tagline: "Ready for a real challenge?",
   },
   {
     level: 5,
@@ -72,6 +76,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: true,
     blunderChance: 0,
     description: "Improving club",
+    tagline: "I don't make many mistakes",
   },
   {
     level: 6,
@@ -85,6 +90,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: true,
     blunderChance: 0,
     description: "Competitive club",
+    tagline: "Precision is my middle name",
   },
   {
     level: 7,
@@ -98,6 +104,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: false,
     blunderChance: 0,
     description: "Tournament player",
+    tagline: "Tournament-tested and battle-ready",
   },
   {
     level: 8,
@@ -111,6 +118,7 @@ export const ENGINE_LEVELS: readonly EngineLevel[] = [
     limitStrength: false,
     blunderChance: 0,
     description: "Expert/GM sparring",
+    tagline: "No mercy.",
   },
 ] as const;
 

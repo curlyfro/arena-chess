@@ -4,6 +4,8 @@ import confetti from "canvas-confetti";
 import { useAchievementStore } from "@/stores/achievement-store";
 import { getAchievementDef } from "@/constants/achievements";
 import { XP_REWARDS } from "@/constants/xp-config";
+import { playSound } from "@/lib/sounds";
+import { useGameStore } from "@/stores/game-store";
 
 const HIGH_TIER_PREFIXES = ["elo-", "streak-10", "beat-l8", "puzzle-100", "tutorial-all"];
 
@@ -11,6 +13,8 @@ export function AchievementCelebration() {
   const pendingId = useAchievementStore((s) => s.pendingCelebration);
   const dismiss = useAchievementStore((s) => s.dismissCelebration);
   const achievement = pendingId ? getAchievementDef(pendingId) : null;
+  const soundEnabled = useGameStore((s) => s.soundEnabled);
+  const soundVolume = useGameStore((s) => s.soundVolume);
   const confettiFiredRef = useRef(false);
 
   const isHighTier = pendingId
@@ -18,14 +22,16 @@ export function AchievementCelebration() {
     : false;
 
   useEffect(() => {
-    if (achievement && isHighTier && !confettiFiredRef.current) {
-      confettiFiredRef.current = true;
-      confetti({ particleCount: 80, spread: 60, origin: { y: 0.5 } });
-    }
-    if (!achievement) {
+    if (achievement) {
+      if (soundEnabled) playSound("achievement", soundVolume / 100);
+      if (isHighTier && !confettiFiredRef.current) {
+        confettiFiredRef.current = true;
+        confetti({ particleCount: 80, spread: 60, origin: { y: 0.5 } });
+      }
+    } else {
       confettiFiredRef.current = false;
     }
-  }, [achievement, isHighTier]);
+  }, [achievement, isHighTier, soundEnabled, soundVolume]);
 
   if (!achievement) return null;
 

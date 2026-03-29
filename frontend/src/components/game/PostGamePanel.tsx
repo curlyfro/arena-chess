@@ -6,11 +6,27 @@ import { ENGINE_LEVELS } from "@/constants/engine-levels";
 import { isPlayerWin } from "@/lib/game-utils";
 import { generateNarrative, generateSuggestions } from "@/lib/game-narrative";
 import { detectTacticalPatterns } from "@/lib/tactical-detector";
+import { useAchievementStore } from "@/stores/achievement-store";
 import { useTutorialStore } from "@/stores/tutorial-store";
 import type { GameStatus, GameResult, PieceColor, AnnotatedMove, MoveClassification } from "@/types/chess";
 import type { PostGameStats } from "@/types/game";
 
 const EMPTY_CLASSIFICATIONS: ReadonlyMap<number, MoveClassification> = new Map();
+
+const RATING_MILESTONES = [
+  { rating: 1200, title: "Club Player" },
+  { rating: 1400, title: "Rising Star" },
+  { rating: 1600, title: "Competitor" },
+  { rating: 1800, title: "Expert" },
+  { rating: 2000, title: "Master" },
+  { rating: 2200, title: "Grandmaster" },
+] as const;
+
+function getNextRatingMilestone(currentRating: number): { pointsAway: number; title: string } | null {
+  const next = RATING_MILESTONES.find((m) => m.rating > currentRating);
+  if (!next) return null;
+  return { pointsAway: next.rating - currentRating, title: next.title };
+}
 
 interface PostGamePanelProps {
   readonly status: GameStatus;
@@ -30,6 +46,7 @@ interface PostGamePanelProps {
   readonly classifications?: ReadonlyMap<number, MoveClassification>;
   readonly history?: readonly AnnotatedMove[];
   readonly analysisBestMoves?: readonly string[];
+  readonly eloAfter?: number;
 }
 
 function getResultText(
@@ -81,6 +98,7 @@ export const PostGamePanel = memo(function PostGamePanel({
   classifications,
   history,
   analysisBestMoves,
+  eloAfter,
 }: PostGamePanelProps) {
   const playerWon = isPlayerWin(playerColor, result);
   const isDraw = result === "1/2-1/2";
@@ -104,6 +122,26 @@ export const PostGamePanel = memo(function PostGamePanel({
       history,
     });
   }, [postGameStats, classifications, history, playerColor, playerWon, isDraw, openingName, accuracy]);
+
+  const unlockedIds = useAchievementStore((s) => s.unlockedIds);
+
+  const ratingMilestone = useMemo(
+    () => (eloAfter != null ? getNextRatingMilestone(eloAfter) : null),
+    [eloAfter],
+  );
+
+  const streakMilestone = useMemo(() => {
+    if (winStreak == null || !playerWon) return null;
+    if (!unlockedIds.includes("streak-10")) {
+      const winsNeeded = 10 - winStreak;
+      if (winsNeeded > 0) return { winsNeeded, name: "Unstoppable" };
+    }
+    if (!unlockedIds.includes("streak-5")) {
+      const winsNeeded = 5 - winStreak;
+      if (winsNeeded > 0) return { winsNeeded, name: "On Fire" };
+    }
+    return null;
+  }, [winStreak, playerWon, unlockedIds]);
 
   const completedLessons = useTutorialStore((s) => s.completedLessons);
   const tacticalSuggestions = useMemo(() => {
@@ -178,6 +216,23 @@ export const PostGamePanel = memo(function PostGamePanel({
           <div className="text-right">{postGameStats.mistakes}</div>
           <div className="text-muted-foreground">Inaccuracies</div>
           <div className="text-right">{postGameStats.inaccuracies}</div>
+        </div>
+      )}
+
+      {(ratingMilestone || streakMilestone) && (
+        <div className="space-y-1 text-center">
+          {ratingMilestone && (
+            <p className="text-xs text-muted-foreground">
+              <span className="text-warning font-medium">{ratingMilestone.pointsAway}</span> points from{" "}
+              <span className="text-warning font-medium">{ratingMilestone.title}</span>
+            </p>
+          )}
+          {streakMilestone && (
+            <p className="text-xs text-muted-foreground">
+              <span className="text-foreground font-medium">{streakMilestone.winsNeeded}</span> more wins for{" "}
+              <span className="text-foreground font-medium">{streakMilestone.name}</span>
+            </p>
+          )}
         </div>
       )}
 

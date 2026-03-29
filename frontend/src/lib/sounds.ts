@@ -1,4 +1,4 @@
-export type SoundType = "move" | "capture" | "check" | "castle" | "lowTime" | "gameEnd" | "checkmate" | "illegal";
+export type SoundType = "move" | "capture" | "check" | "castle" | "lowTime" | "gameEnd" | "checkmate" | "illegal" | "achievement";
 
 let audioCtx: AudioContext | null = null;
 
@@ -159,6 +159,12 @@ const proceduralSounds: Record<SoundType, () => void> = {
 
   illegal: () => {
     playTone(150, 0.2, "square", 0.12);
+  },
+
+  achievement: () => {
+    playTone(523, 0.13, "sine", 0.25);
+    setTimeout(() => playTone(659, 0.13, "sine", 0.25), 130);
+    setTimeout(() => playTone(784, 0.13, "sine", 0.3), 260);
   },
 };
 

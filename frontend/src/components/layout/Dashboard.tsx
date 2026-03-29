@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { playerApi, type GameSummary } from "@/lib/api";
-import { AI_NAME_MAP } from "@/constants/engine-levels";
+import { AI_NAME_MAP, ENGINE_LEVELS } from "@/constants/engine-levels";
+import { TIME_CONTROLS } from "@/constants/time-controls";
 import { RatingCard } from "@/components/ui/RatingCard";
 import { LevelBadge } from "@/components/ui/LevelBadge";
 import { PgnImportDialog } from "@/components/game/PgnImportDialog";
@@ -62,12 +63,40 @@ function computeTrend(games: GameSummary[]): "up" | "down" | "flat" {
   return "flat";
 }
 
+function NavIcon({ d }: { readonly d: string }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="inline-block">
+      <path d={d} />
+    </svg>
+  );
+}
+
 const NAV_ITEMS = [
-  { to: "/tutorials", label: "Tutorials", icon: "\u265D" },
-  { to: "/puzzles", label: "Puzzles", icon: "\u265F" },
-  { to: "/openings", label: "Openings", icon: "\u265E" },
-  { to: "/profile", label: "Profile", icon: "\u265A" },
-  { to: "/leaderboard", label: "Leaderboard", icon: "\u265B" },
+  {
+    to: "/tutorials",
+    label: "Tutorials",
+    icon: "M6.5 2A2.5 2.5 0 0 0 4 4.5v15A2.5 2.5 0 0 0 6.5 22H20V2H6.5ZM8 7h8v1.5H8V7Zm0 4h6v1.5H8V11Z",
+  },
+  {
+    to: "/puzzles",
+    label: "Puzzles",
+    icon: "M13.5 2.5a2.5 2.5 0 0 0-3 0C9.6 3.2 9 4.3 9 5.5V6H8a3 3 0 0 0-3 3v1h1.5a2.5 2.5 0 0 1 0 5H5v1a3 3 0 0 0 3 3h1v-1.5a2.5 2.5 0 0 1 5 0V19h1a3 3 0 0 0 3-3v-1h-1.5a2.5 2.5 0 0 1 0-5H19V9a3 3 0 0 0-3-3h-1v-.5c0-1.2-.6-2.3-1.5-3Z",
+  },
+  {
+    to: "/openings",
+    label: "Openings",
+    icon: "M19 22H5v-2h14v2Zm-3-4H8l-1-2c0-2 1.5-3.5 2-4.5C9.5 10 8 8.5 8 6.5 8 4 10 2 12 2s4 2 4 4.5c0 2-1.5 3.5-1 5 .5 1 2 2.5 2 4.5l-1 2Z",
+  },
+  {
+    to: "/profile",
+    label: "Profile",
+    icon: "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4Z",
+  },
+  {
+    to: "/leaderboard",
+    label: "Leaderboard",
+    icon: "M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3L12 14l-4.8 2.6.9-5.3L4.3 7.6l5.3-.8L12 2Z",
+  },
 ] as const;
 
 export function Dashboard({
@@ -80,9 +109,11 @@ export function Dashboard({
   onOpenSettings,
 }: DashboardProps) {
   const [recentGames, setRecentGames] = useState<GameSummary[]>([]);
+  const [ratingHistory, setRatingHistory] = useState<Record<string, number[]>>({});
   const [showPgnImport, setShowPgnImport] = useState(false);
   const navigate = useNavigate();
   const winStreak = useGameStore((s) => s.winStreak);
+  const lastGameSettings = useGameStore((s) => s.lastGameSettings);
   const refreshChallenges = useChallengeStore((s) => s.refreshChallenges);
   const dailyChallenges = useChallengeStore((s) => s.dailyChallenges);
   const weeklyChallenges = useChallengeStore((s) => s.weeklyChallenges);
@@ -100,6 +131,20 @@ export function Dashboard({
       .getGames(authUser.playerId, 1, 3)
       .then((res) => setRecentGames(res.data.data))
       .catch(() => { /* non-critical — dashboard still usable without recent games */ });
+
+    Promise.all(
+      (["bullet", "blitz", "rapid"] as const).map((tc) =>
+        playerApi
+          .getRatingHistory(authUser.playerId, tc)
+          .then((res) => [tc, res.data.map((e) => e.rating)] as const)
+      ),
+    )
+      .then((results) => {
+        const hist: Record<string, number[]> = {};
+        for (const [tc, ratings] of results) hist[tc] = ratings;
+        setRatingHistory(hist);
+      })
+      .catch(() => { /* non-critical — sparklines just won't render */ });
   }, [authUser]);
 
   const trend = computeTrend(recentGames);
@@ -150,9 +195,18 @@ export function Dashboard({
       <div className="flex gap-3">
         <button
           onClick={onQuickPlay}
-          className="flex-1 rounded-lg bg-accent px-4 py-5 text-xl font-bold text-accent-foreground hover:bg-accent/80"
+          className="flex-1 rounded-lg bg-gradient-to-br from-accent to-accent/70 px-4 py-5 text-xl font-bold text-accent-foreground shadow-lg shadow-accent/20 hover:from-accent/90 hover:to-accent/60"
         >
           Quick Play
+          {lastGameSettings && (() => {
+            const level = ENGINE_LEVELS[lastGameSettings.levelIndex];
+            const tc = TIME_CONTROLS.find((t) => t.id === lastGameSettings.timeControlId);
+            return (
+              <div className="text-xs font-normal opacity-70 mt-0.5">
+                vs {level?.name ?? "AI"} · {tc ? `${tc.category.charAt(0).toUpperCase() + tc.category.slice(1)} ${tc.label}` : ""}
+              </div>
+            );
+          })()}
         </button>
         <button
           onClick={onNewGame}
@@ -208,9 +262,9 @@ export function Dashboard({
       {/* Ratings */}
       {authProfile && (
         <div className="grid grid-cols-3 gap-3">
-          <RatingCard label="Bullet" rating={authProfile.eloBullet} trend={trend} />
-          <RatingCard label="Blitz" rating={authProfile.eloBlitz} trend={trend} />
-          <RatingCard label="Rapid" rating={authProfile.eloRapid} trend={trend} />
+          <RatingCard label="Bullet" rating={authProfile.eloBullet} trend={trend} history={ratingHistory.bullet} />
+          <RatingCard label="Blitz" rating={authProfile.eloBlitz} trend={trend} history={ratingHistory.blitz} />
+          <RatingCard label="Rapid" rating={authProfile.eloRapid} trend={trend} history={ratingHistory.rapid} />
         </div>
       )}
 
@@ -236,7 +290,7 @@ export function Dashboard({
             to={item.to}
             className="rounded-lg bg-muted p-3 text-center hover:bg-border"
           >
-            <div className="text-xl">{item.icon}</div>
+            <NavIcon d={item.icon} />
             <div className="text-sm font-medium text-foreground">{item.label}</div>
           </Link>
         ))}

@@ -9,6 +9,7 @@ import { OpeningExplorerPage } from "@/components/layout/OpeningExplorerPage";
 import { TutorialPage } from "@/components/layout/TutorialPage";
 import { AchievementToast } from "@/components/ui/AchievementToast";
 import { AchievementCelebration } from "@/components/ui/AchievementCelebration";
+import { XpToast } from "@/components/ui/XpToast";
 import { useGameStore } from "@/stores/game-store";
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
         </Routes>
         <AchievementToast />
         <AchievementCelebration />
+        <XpToast />
       </ErrorBoundary>
     </BrowserRouter>
   );
