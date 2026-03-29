@@ -118,6 +118,7 @@ public sealed class GameResultService : IGameResultService
                 PlayedAt = DateTime.UtcNow
             };
 
+            game.Player = player;
             await _gameRepository.AddAsync(game, ct);
 
             if (submission.IsRated && submission.TimeControl != TimeControl.Custom)
