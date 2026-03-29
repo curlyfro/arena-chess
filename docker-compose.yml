@@ -1,20 +1,6 @@
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: chessarena_dev
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
   dynamodb-local:
     image: amazon/dynamodb-local:latest
     ports:
       - "8000:8000"
     command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
-
-volumes:
-  pgdata:
